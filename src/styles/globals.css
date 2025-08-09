@@ -1,0 +1,241 @@
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 18.2px;
+  --background: #0a0e27;
+  --foreground: #e8eaf6;
+  --card: #1a1d3a;
+  --card-foreground: #e8eaf6;
+  --popover: #1a1d3a;
+  --popover-foreground: #e8eaf6;
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
+  --secondary: #2d1b69;
+  --secondary-foreground: #e8eaf6;
+  --muted: #1e1e3f;
+  --muted-foreground: #9ca3af;
+  --accent: #ff8a65;
+  --accent-foreground: #1a1d3a;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: rgba(139, 92, 246, 0.2);
+  --input: transparent;
+  --input-background: rgba(30, 30, 63, 0.5);
+  --switch-background: #374151;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: #8b5cf6;
+  --chart-1: #6366f1;
+  --chart-2: #8b5cf6;
+  --chart-3: #a855f7;
+  --chart-4: #c084fc;
+  --chart-5: #e879f9;
+  --radius: 0.75rem;
+  --sidebar: #0f172a;
+  --sidebar-foreground: #e8eaf6;
+  --sidebar-primary: #6366f1;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1e1e3f;
+  --sidebar-accent-foreground: #e8eaf6;
+  --sidebar-border: rgba(139, 92, 246, 0.2);
+  --sidebar-ring: #8b5cf6;
+  
+  /* Custom lantern theme colors */
+  --lantern-glow: #ff8a65;
+  --star-purple: #6366f1;
+  --night-blue: #0a0e27;
+  --soft-orange: #ffb74d;
+}
+
+.dark {
+  --background: #0a0e27;
+  --foreground: #e8eaf6;
+  --card: #1a1d3a;
+  --card-foreground: #e8eaf6;
+  --popover: #1a1d3a;
+  --popover-foreground: #e8eaf6;
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
+  --secondary: #2d1b69;
+  --secondary-foreground: #e8eaf6;
+  --muted: #1e1e3f;
+  --muted-foreground: #9ca3af;
+  --accent: #ff8a65;
+  --accent-foreground: #1a1d3a;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: rgba(139, 92, 246, 0.2);
+  --input: rgba(30, 30, 63, 0.5);
+  --ring: #8b5cf6;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --chart-1: #6366f1;
+  --chart-2: #8b5cf6;
+  --chart-3: #a855f7;
+  --chart-4: #c084fc;
+  --chart-5: #e879f9;
+  --sidebar: #0f172a;
+  --sidebar-foreground: #e8eaf6;
+  --sidebar-primary: #6366f1;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1e1e3f;
+  --sidebar-accent-foreground: #e8eaf6;
+  --sidebar-border: rgba(139, 92, 246, 0.2);
+  --sidebar-ring: #8b5cf6;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  
+  /* Custom properties */
+  --color-lantern-glow: var(--lantern-glow);
+  --color-star-purple: var(--star-purple);
+  --color-night-blue: var(--night-blue);
+  --color-soft-orange: var(--soft-orange);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    background: linear-gradient(180deg, #0a0e27 0%, #1a1d3a 50%, #2d1b69 100%);
+    min-height: 100vh;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+}
+
+/**
+ * Base typography. This is not applied to elements which have an ancestor with a Tailwind text class.
+ */
+@layer base {
+  :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) {
+    h1 {
+      font-size: var(--text-2xl);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h2 {
+      font-size: var(--text-xl);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h3 {
+      font-size: var(--text-lg);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h4 {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    p {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: 1.5;
+    }
+
+    label {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    button {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    input {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: 1.5;
+    }
+  }
+}
+
+html {
+  font-size: var(--font-size);
+}
+
+/* Custom animations for lantern effects */
+@keyframes float {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(-10px) scale(1.02); }
+}
+
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(255, 138, 101, 0.3); }
+  50% { box-shadow: 0 0 30px rgba(255, 138, 101, 0.6); }
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+@keyframes rise-up {
+  0% { transform: translateY(100vh) scale(0.5); opacity: 0.8; }
+  100% { transform: translateY(-100vh) scale(0.2); opacity: 0; }
+}
+
+.lantern-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.lantern-glow {
+  animation: glow 2s ease-in-out infinite;
+}
+
+.star-twinkle {
+  animation: twinkle 2s ease-in-out infinite;
+}
+
+.lantern-rise {
+  animation: rise-up 10s linear forwards;
+}

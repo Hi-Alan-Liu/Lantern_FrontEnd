@@ -1,3 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "./styles/globals.css"; /* 自己的全域 CSS 要緊跟在這裡 */
+
+@source "./index.html" "./src/**/*.{ts,tsx,js,jsx}";
