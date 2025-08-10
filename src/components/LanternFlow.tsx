@@ -8,9 +8,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { LanternRenderer } from './lantern/LanternRenderer';
 import { lanternStyles, wishCategories, suggestionTexts, LanternStyle, WishCategory, FlowStep } from './lantern/constants';
 import { checkContent } from './lantern/contentFilter';
-// import turtleImage from 'figma:asset/77c01e84d3ea668a4a6bf174344e9ce607a71818.png';
-// import tigerImage from 'figma:asset/c05a431ec7e88403afbb97ede2c2d8794edd850f.png';
-// import birdImage from 'figma:asset/c24383adfb4b961f8f5083ecc7ff13f0b42afb10.png';
+import turtleImage from '@/assets/turtle.png';
+import tigerImage from '@/assets/tiger.png';
+import birdImage from '@/assets/bird.png';
+import rabbitImage from '@/assets/rabbit.png';
 
 interface LanternFlowProps {
   onNavigate: (page: 'landing' | 'lantern-flow' | 'task-center' | 'wish-wall') => void;
@@ -121,7 +122,7 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
           >
             <div className="w-32 h-40 mx-auto relative">
               <img 
-                // src={selectedStyle === 'turtle' ? turtleImage : selectedStyle === 'tiger' ? tigerImage : birdImage} 
+                src={selectedStyle === 'turtle' ? turtleImage : selectedStyle === 'tiger' ? tigerImage : birdImage} 
                 alt={`${selectedStyle} lantern`}
                 className="w-full h-full object-contain transform scale-[1.95]"
               />
@@ -137,16 +138,19 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
             let imageSrc;
             switch (randomStyle.id) {
               case 'turtle':
-                imageSrc = "turtleImage";
+                imageSrc = turtleImage;
                 break;
               case 'tiger':
-                imageSrc = "tigerImage";
+                imageSrc = tigerImage;
                 break;
               case 'bird':
-                imageSrc = "birdImage";
+                imageSrc = birdImage;
+                break;
+              case 'rabbit':
+                imageSrc = rabbitImage;
                 break;
               default:
-                imageSrc = "turtleImage";
+                imageSrc = turtleImage;
             }
             
             return (

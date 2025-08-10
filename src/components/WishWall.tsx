@@ -2,15 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { ArrowLeft, Star, Sparkles, MessageCircle, Gift, Frown, MoreHorizontal } from 'lucide-react';
 import { motion } from "framer-motion";
-// import turtleImage from 'figma:asset/77c01e84d3ea668a4a6bf174344e9ce607a71818.png';
-// import tigerImage from 'figma:asset/c05a431ec7e88403afbb97ede2c2d8794edd850f.png';
-// import birdImage from 'figma:asset/c24383adfb4b961f8f5083ecc7ff13f0b42afb10.png';
+import turtleImage from '@/assets/turtle.png';
+import tigerImage from '@/assets/tiger.png';
+import birdImage from '@/assets/bird.png';
+import rabbitImage from '@/assets/rabbit.png';
 
 interface WishWallProps {
   onNavigate: (page: 'landing' | 'lantern-flow' | 'task-center' | 'wish-wall') => void;
 }
 
-type LanternStyle = 'turtle' | 'tiger' | 'bird';
+type LanternStyle = 'turtle' | 'tiger' | 'bird' | 'rabbit';
 
 interface FloatingLantern {
   id: string;
@@ -151,16 +152,19 @@ export function WishWall({ onNavigate }: WishWallProps) {
           let imageSrc;
           switch (lantern.style) {
             case 'turtle':
-              imageSrc = "turtleImage";
+              imageSrc = turtleImage;
               break;
             case 'tiger':
-              imageSrc = "tigerImage";
+              imageSrc = tigerImage;
               break;
             case 'bird':
-              imageSrc = "birdImage";
+              imageSrc = birdImage;
+              break;
+            case 'rabbit':
+              imageSrc = rabbitImage;
               break;
             default:
-              imageSrc = "turtleImage";
+              imageSrc = turtleImage;
           }
           
           return (

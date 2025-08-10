@@ -1,6 +1,6 @@
 import { Sparkles, Heart, MessageCircle, Gift, Frown, MoreHorizontal } from 'lucide-react';
 
-export type LanternStyle = 'turtle' | 'tiger' | 'bird';
+export type LanternStyle = 'turtle' | 'tiger' | 'bird' | 'rabbit';
 export type WishCategory = 'wish' | 'talk' | 'thanks' | 'vent' | 'other';
 export type FlowStep = 'style' | 'category' | 'content' | 'confirm' | 'animation' | 'complete';
 
