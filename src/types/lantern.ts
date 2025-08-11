@@ -28,7 +28,9 @@ export interface Style {
   name: string; 
   displayName: string;
   desc?: string | null;
-  price: number;
+  gradient?: string | null;
+  shadowColor?: string | null;
+  point: number;
   sortOrder: number;
 }
 

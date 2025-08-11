@@ -6,7 +6,8 @@ import { Badge } from './ui/badge';
 import { ArrowLeft, ArrowRight, Sparkles, Edit, Send, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from "framer-motion";
 import { LanternRenderer } from './lantern/LanternRenderer';
-import { lanternStyles, wishCategories, suggestionTexts, LanternStyle, WishCategory, FlowStep } from './lantern/constants';
+import { useLanternMeta } from '@/hooks/useLanternMeta';
+import { suggestionTexts, LanternStyle, WishCategory, FlowStep } from './lantern/constants';
 import { checkContent } from './lantern/contentFilter';
 import turtleImage from '@/assets/turtle.png';
 import tigerImage from '@/assets/tiger.png';
@@ -55,6 +56,8 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
     for (const c of categoryList) map.set(normalize(c.name), c.id);
     return map;
   }, [categoryList]);
+
+  const { styles: lanternStyles, categories: wishCategories, loading, error } = useLanternMeta();
 
   // 啟動時把 Style / Category 撈起來（PageSize=0 全撈）
   useEffect(() => {
