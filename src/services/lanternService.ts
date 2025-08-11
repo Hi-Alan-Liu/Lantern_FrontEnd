@@ -62,13 +62,25 @@ export async function getLanternList(
 
 /** 建立天燈 */
 export async function createLantern(payload: CreateLanternRequest): Promise<Lantern> {
-  const url = `${API_BASE}/api/lantern`;
+  const url = `${API_BASE}/api/user/lantern`;
+  const existingUserId = localStorage.getItem('X-User-Id') || '';
+
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      ...(existingUserId && { 'X-User-Id': existingUserId }), // 有就帶上
+    },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error(`POST /api/lantern failed: ${res.status}`);
+
+  if (!res.ok) throw new Error(`POST /api/user/lantern failed: ${res.status}`);
+
+  const newUserId = res.headers.get('X-User-Id');
+  if (newUserId) {
+    localStorage.setItem('X-User-Id', newUserId);
+  }
 
   const json = (await res.json()) as ApiEnvelope<Lantern>;
   if (json.statusCode !== 200) {
