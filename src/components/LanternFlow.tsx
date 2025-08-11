@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Textarea } from './ui/textarea';
@@ -12,6 +12,9 @@ import turtleImage from '@/assets/turtle.png';
 import tigerImage from '@/assets/tiger.png';
 import birdImage from '@/assets/bird.png';
 import rabbitImage from '@/assets/rabbit.png';
+
+import { createLantern, getStyleList, getCategoryList } from '@/services/lanternService';
+import type { Style, Category } from '@/types/lantern';
 
 interface LanternFlowProps {
   onNavigate: (page: 'landing' | 'lantern-flow' | 'task-center' | 'wish-wall') => void;
@@ -28,13 +31,62 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
   const [contentWarning, setContentWarning] = useState('');
   const [showWarning, setShowWarning] = useState(false);
 
+  // --- 新增：建立 API 需要用到的 ID 對照 ---
+  const [styleList, setStyleList] = useState<Style[]>([]);
+  const [categoryList, setCategoryList] = useState<Category[]>([]);
+  const [metaLoading, setMetaLoading] = useState<boolean>(true);
+  const [metaError, setMetaError] = useState<string | null>(null);
+
+  // 送出建立中的狀態
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const normalize = (s?: string) => s?.toLowerCase().trim() ?? '';
+
+  // 把 style/category 的代碼（name）對應到 ID，供建立時使用
+  const styleCodeToId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const s of styleList) map.set(normalize(s.name), s.id);
+    return map;
+  }, [styleList]);
+
+  const categoryCodeToId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const c of categoryList) map.set(normalize(c.name), c.id);
+    return map;
+  }, [categoryList]);
+
+  // 啟動時把 Style / Category 撈起來（PageSize=0 全撈）
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        setMetaLoading(true);
+        const [stylesRes, catsRes] = await Promise.all([
+          getStyleList({ page: 1, pageSize: 0 }),
+          getCategoryList({ page: 1, pageSize: 0 }),
+        ]);
+        if (!alive) return;
+        setStyleList(stylesRes.dataList ?? []);
+        setCategoryList(catsRes.dataList ?? []);
+        setMetaError(null);
+      } catch (e: any) {
+        if (!alive) return;
+        setMetaError(e?.message ?? '載入樣式/類別失敗');
+      } finally {
+        if (alive) setMetaLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
   const getSelectedStyleData = () => {
     return lanternStyles.find(style => style.id === selectedStyle)!;
   };
 
-  const nextStep = () => {
+  const nextStep = async () => {
     switch (currentStep) {
-      case 'style':
+      case 'style': {
         const styleData = getSelectedStyleData();
         if (styleData.points > userPoints) {
           onNavigate('task-center');
@@ -42,10 +94,12 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
         }
         setCurrentStep('category');
         break;
+      }
       case 'category':
         setCurrentStep('content');
         break;
-      case 'content':
+
+      case 'content': {
         if (wishContent.trim()) {
           const contentCheck = checkContent(wishContent);
           if (contentCheck.isValid) {
@@ -56,18 +110,50 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
           }
         }
         break;
-      case 'confirm':
+      }
+
+      case 'confirm': {
+        // 1) 取得扣點資訊
         const selectedStyleData = getSelectedStyleData();
-        if (selectedStyleData.points > 0) {
-          onSpendPoints(selectedStyleData.points);
+        // 2) 解析出 styleId / categoryId
+        const styleId = styleCodeToId.get(normalize(selectedStyle));
+        const categoryId = categoryCodeToId.get(normalize(selectedCategory));
+
+        if (!styleId || !categoryId) {
+          setSubmitError('無法解析樣式或類別，請稍後再試');
+          return;
         }
-        setCurrentStep('animation');
-        setIsAnimating(true);
-        setTimeout(() => {
-          setIsAnimating(false);
-          setCurrentStep('complete');
-        }, 10000);
+
+        try {
+          setSubmitError(null);
+          setSubmitting(true);
+
+          // 3) 呼叫建立 API
+          await createLantern({
+            styleId,
+            categoryId,
+            text: wishContent.trim(),
+          });
+
+          // 4) 扣點（若需要）
+          if (selectedStyleData.points > 0) {
+            onSpendPoints(selectedStyleData.points);
+          }
+
+          // 5) 成功後進入動畫
+          setCurrentStep('animation');
+          setIsAnimating(true);
+          setTimeout(() => {
+            setIsAnimating(false);
+            setCurrentStep('complete');
+          }, 10000);
+        } catch (e: any) {
+          setSubmitError(e?.message ?? '建立天燈失敗，請稍後再試');
+        } finally {
+          setSubmitting(false);
+        }
         break;
+      }
     }
   };
 
@@ -122,7 +208,11 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
           >
             <div className="w-32 h-40 mx-auto relative">
               <img 
-                src={selectedStyle === 'turtle' ? turtleImage : selectedStyle === 'tiger' ? tigerImage : birdImage} 
+                src={
+                  selectedStyle === 'turtle' ? turtleImage :
+                  selectedStyle === 'tiger'  ? tigerImage  :
+                  selectedStyle === 'bird'   ? birdImage   : rabbitImage
+                } 
                 alt={`${selectedStyle} lantern`}
                 className="w-full h-full object-contain transform scale-[1.95]"
               />
@@ -185,6 +275,14 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
     );
   }
 
+  // 若樣式/類別清單還在載入，在第一步先顯示載入/錯誤（避免到確認時才發現沒 ID）
+  const metaBanner = (currentStep === 'style' || currentStep === 'category') && (
+    <>
+      {metaLoading && <p className="text-sm text-muted-foreground mb-4">載入樣式/類別中...</p>}
+      {metaError && <p className="text-sm text-destructive mb-4">{metaError}</p>}
+    </>
+  );
+
   return (
     <div className="min-h-screen flex flex-col px-4 py-8">
       {/* Header */}
@@ -237,8 +335,9 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
                 exit={{ opacity: 0, x: -20 }}
                 className="text-center"
               >
-                <h2 className="text-2xl mb-8">選擇你的天燈樣式</h2>
-                
+                <h2 className="text-2xl mb-2">選擇你的天燈樣式</h2>
+                {metaBanner}
+
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8 max-w-3xl mx-auto">
                   {lanternStyles.map((style) => (
                     <Card 
@@ -276,7 +375,7 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
                   ))}
                 </div>
 
-                <Button onClick={nextStep} size="lg" className="px-8">
+                <Button onClick={nextStep} size="lg" className="px-8" disabled={metaLoading}>
                   <ArrowRight className="w-4 h-4 mr-2" />
                   下一步
                 </Button>
@@ -292,7 +391,8 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
                 exit={{ opacity: 0, x: -20 }}
                 className="text-center"
               >
-                <h2 className="text-2xl mb-8">選擇願望類型</h2>
+                <h2 className="text-2xl mb-2">選擇願望類型</h2>
+                {metaBanner}
                 
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
                   {wishCategories.map((category) => {
@@ -319,7 +419,7 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
                   })}
                 </div>
 
-                <Button onClick={nextStep} size="lg" className="px-8">
+                <Button onClick={nextStep} size="lg" className="px-8" disabled={metaLoading}>
                   <ArrowRight className="w-4 h-4 mr-2" />
                   下一步
                 </Button>
@@ -409,7 +509,11 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
                 exit={{ opacity: 0, x: -20 }}
                 className="text-center"
               >
-                <h2 className="text-2xl mb-8">確認你的天燈</h2>
+                <h2 className="text-2xl mb-4">確認你的天燈</h2>
+
+                {submitError && (
+                  <p className="text-sm text-destructive mb-4">{submitError}</p>
+                )}
                 
                 <Card className="p-8 mb-8 bg-card/50 backdrop-blur-sm">
                   <div className="flex flex-col items-center">
@@ -417,7 +521,7 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
                     
                     <div className="max-w-sm mt-6">
                       <p className="text-sm text-muted-foreground mb-2">
-                        樣式：{getSelectedStyleData().name}
+                        樣式：{lanternStyles.find(s => s.id === selectedStyle)?.name}
                       </p>
                       <p className="text-sm text-muted-foreground mb-2">
                         願望類型：{wishCategories.find(c => c.id === selectedCategory)?.name}
@@ -434,6 +538,7 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
                     variant="outline"
                     onClick={() => setCurrentStep('content')}
                     className="px-6"
+                    disabled={submitting}
                   >
                     <Edit className="w-4 h-4 mr-2" />
                     修改內容
@@ -443,9 +548,10 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
                     onClick={nextStep}
                     size="lg"
                     className="px-8 bg-gradient-to-r from-[#ff8a65] to-[#ffb74d] hover:from-[#ff7043] hover:to-[#ff9800]"
+                    disabled={submitting || metaLoading}
                   >
                     <Send className="w-4 h-4 mr-2" />
-                    點燈放飛
+                    {submitting ? '送出中...' : '點燈放飛'}
                   </Button>
                 </div>
               </motion.div>

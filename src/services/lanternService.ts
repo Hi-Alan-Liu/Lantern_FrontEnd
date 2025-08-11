@@ -59,3 +59,20 @@ export async function getLanternList(
   }
   return json.contents;
 }
+
+/** 建立天燈 */
+export async function createLantern(payload: CreateLanternRequest): Promise<Lantern> {
+  const url = `${API_BASE}/api/lantern`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`POST /api/lantern failed: ${res.status}`);
+
+  const json = (await res.json()) as ApiEnvelope<Lantern>;
+  if (json.statusCode !== 200) {
+    throw new Error(json.message || 'createLantern error');
+  }
+  return json.contents;
+}
