@@ -219,9 +219,48 @@ html {
   50% { opacity: 1; }
 }
 
+@keyframes twinkle-slow {
+  0%, 100% { opacity: 0.2; }
+  25% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+  75% { opacity: 0.5; }
+}
+
 @keyframes rise-up {
   0% { transform: translateY(100vh) scale(0.5); opacity: 0.8; }
   100% { transform: translateY(-100vh) scale(0.2); opacity: 0; }
+}
+
+@keyframes user-lantern-glow {
+  0%, 100% { 
+    transform: scale(1); 
+    opacity: 0.6; 
+    filter: blur(8px);
+  }
+  50% { 
+    transform: scale(1.3); 
+    opacity: 0.9; 
+    filter: blur(12px);
+  }
+}
+
+@keyframes sparkle-dance {
+  0%, 100% { 
+    transform: translateY(0) rotate(0deg) scale(1); 
+    opacity: 0;
+  }
+  25% { 
+    transform: translateY(-10px) rotate(90deg) scale(1.2); 
+    opacity: 1;
+  }
+  50% { 
+    transform: translateY(-15px) rotate(180deg) scale(0.8); 
+    opacity: 0.8;
+  }
+  75% { 
+    transform: translateY(-10px) rotate(270deg) scale(1.1); 
+    opacity: 1;
+  }
 }
 
 .lantern-float {
@@ -236,6 +275,23 @@ html {
   animation: twinkle 2s ease-in-out infinite;
 }
 
+.star-twinkle-slow {
+  animation: twinkle-slow 4s ease-in-out infinite;
+}
+
 .lantern-rise {
   animation: rise-up 10s linear forwards;
+}
+
+.user-lantern-glow {
+  animation: user-lantern-glow 3s ease-in-out infinite;
+}
+
+.sparkle-dance {
+  animation: sparkle-dance 4s ease-in-out infinite;
+}
+
+/* Custom scale utilities */
+.scale-200 {
+  transform: scale(2);
 }

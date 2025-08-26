@@ -6,8 +6,7 @@ import type {
   CreateLanternRequest,
   Style, 
   Category
-} from '@/types/lantern';
-
+} from './lantern';
 
 const API_BASE = 'https://lantern-api.zeabur.app';
 

@@ -4,26 +4,23 @@ import { Card } from './ui/card';
 import { Textarea } from './ui/textarea';
 import { Badge } from './ui/badge';
 import { ArrowLeft, ArrowRight, Sparkles, Edit, Send, AlertTriangle } from 'lucide-react';
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from 'motion/react';
 import { LanternRenderer } from './lantern/LanternRenderer';
-import { useLanternMeta } from '@/hooks/useLanternMeta';
-import { suggestionTexts, LanternStyle, WishCategory, FlowStep } from './lantern/constants';
+import { lanternStyles, wishCategories, suggestionTexts, LanternStyle, WishCategory, FlowStep } from './lantern/constants';
 import { checkContent } from './lantern/contentFilter';
-import turtleImage from '@/assets/turtle.png';
-import tigerImage from '@/assets/tiger.png';
-import birdImage from '@/assets/bird.png';
-import rabbitImage from '@/assets/rabbit.png';
 
-import { createLantern, getStyleList, getCategoryList } from '@/services/lanternService';
-import type { Style, Category } from '@/types/lantern';
+// ✅ API（保留）
+import { createLantern, getStyleList, getCategoryList } from './lantern/lanternService';
+import type { Style, Category } from './lantern/lantern';
 
 interface LanternFlowProps {
   onNavigate: (page: 'landing' | 'lantern-flow' | 'task-center' | 'wish-wall') => void;
   userPoints: number;
   onSpendPoints: (points: number) => boolean;
+  onAddLantern: (lantern: { style: string; category: string; content: string; }) => void;
 }
 
-export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFlowProps) {
+export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLantern }: LanternFlowProps) {
   const [currentStep, setCurrentStep] = useState<FlowStep>('style');
   const [selectedStyle, setSelectedStyle] = useState<LanternStyle>('turtle');
   const [selectedCategory, setSelectedCategory] = useState<WishCategory>('wish');
@@ -32,19 +29,19 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
   const [contentWarning, setContentWarning] = useState('');
   const [showWarning, setShowWarning] = useState(false);
 
-  // --- 新增：建立 API 需要用到的 ID 對照 ---
+  // ✅ 後端 meta
   const [styleList, setStyleList] = useState<Style[]>([]);
   const [categoryList, setCategoryList] = useState<Category[]>([]);
   const [metaLoading, setMetaLoading] = useState<boolean>(true);
   const [metaError, setMetaError] = useState<string | null>(null);
 
-  // 送出建立中的狀態
+  // ✅ 送出狀態
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const normalize = (s?: string) => s?.toLowerCase().trim() ?? '';
 
-  // 把 style/category 的代碼（name）對應到 ID，供建立時使用
+  // ✅ 名稱(code/name) → id 對照（用後端回來的 name 做 key；若後端提供 code，可改成 code）
   const styleCodeToId = useMemo(() => {
     const map = new Map<string, number>();
     for (const s of styleList) map.set(normalize(s.name), s.id);
@@ -57,9 +54,6 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
     return map;
   }, [categoryList]);
 
-  const { styles: lanternStyles, categories: wishCategories, loading, error } = useLanternMeta();
-
-  // 啟動時把 Style / Category 撈起來（PageSize=0 全撈）
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -70,8 +64,8 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
           getCategoryList({ page: 1, pageSize: 0 }),
         ]);
         if (!alive) return;
-        setStyleList(stylesRes.dataList ?? []);
-        setCategoryList(catsRes.dataList ?? []);
+        setStyleList(stylesRes?.dataList ?? []);
+        setCategoryList(catsRes?.dataList ?? []);
         setMetaError(null);
       } catch (e: any) {
         if (!alive) return;
@@ -116,9 +110,7 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
       }
 
       case 'confirm': {
-        // 1) 取得扣點資訊
-        const selectedStyleData = getSelectedStyleData();
-        // 2) 解析出 styleId / categoryId
+        // ✅ 轉成後端需要的 ID
         const styleId = styleCodeToId.get(normalize(selectedStyle));
         const categoryId = categoryCodeToId.get(normalize(selectedCategory));
 
@@ -131,19 +123,27 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
           setSubmitError(null);
           setSubmitting(true);
 
-          // 3) 呼叫建立 API
+          // ✅ 呼叫建立 API
           await createLantern({
             styleId,
             categoryId,
             text: wishContent.trim(),
           });
 
-          // 4) 扣點（若需要）
+          // ✅ 扣點（如需）
+          const selectedStyleData = getSelectedStyleData();
           if (selectedStyleData.points > 0) {
             onSpendPoints(selectedStyleData.points);
           }
 
-          // 5) 成功後進入動畫
+          // ✅ 本地加入使用者天燈（供 WishWall 動畫）
+          onAddLantern({
+            style: selectedStyle,
+            category: selectedCategory,
+            content: wishContent,
+          });
+
+          // ✅ 進入動畫 → 完成
           setCurrentStep('animation');
           setIsAnimating(true);
           setTimeout(() => {
@@ -183,7 +183,7 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newContent = e.target.value;
     setWishContent(newContent);
-    
+
     if (newContent.trim()) {
       const contentCheck = checkContent(newContent);
       if (!contentCheck.isValid) {
@@ -203,131 +203,175 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
     return (
       <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
         <div className="text-center">
+          {/* Main user lantern with enhanced effects */}
           <motion.div
             className="relative mx-auto mb-8"
-            initial={{ y: 100, opacity: 0.8, scale: 0.5 }}
-            animate={{ y: -100, opacity: 0, scale: 0.2 }}
-            transition={{ duration: 10, ease: "easeOut" }}
+            initial={{ y: 150, opacity: 0.9, scale: 0.6 }}
+            animate={{
+              y: -200,
+              opacity: 0,
+              scale: 0.1,
+              x: [0, 8, -6, 4, 0],
+            }}
+            transition={{ duration: 10, ease: 'easeOut' }}
           >
             <div className="w-32 h-40 mx-auto relative">
-              <img 
-                src={
-                  selectedStyle === 'turtle' ? turtleImage :
-                  selectedStyle === 'tiger'  ? tigerImage  :
-                  selectedStyle === 'bird'   ? birdImage   : rabbitImage
-                } 
-                alt={`${selectedStyle} lantern`}
-                className="w-full h-full object-contain transform scale-[1.95]"
+              {/* Main glow effect */}
+              <motion.div
+                className="absolute inset-0 rounded-full blur-lg"
+                style={{
+                  background: `radial-gradient(circle, #ff8a65 0%, #ffb74d 50%, transparent 100%)`,
+                }}
+                animate={{
+                  scale: [1, 1.5, 1],
+                  opacity: [0.6, 0.9, 0.6],
+                }}
+                transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
               />
-              <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-xs text-center text-white/80 max-w-24">
-                {wishContent.substring(0, 20)}...
-              </div>
+              {/* Outer glow ring */}
+              <motion.div
+                className="absolute -inset-4 rounded-full blur-xl opacity-40"
+                style={{ background: `radial-gradient(circle, #ff8a65 0%, transparent 60%)` }}
+                animate={{ scale: [1, 1.8, 1], opacity: [0.3, 0.7, 0.3] }}
+                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
+              />
+              <LanternRenderer style={selectedStyle} size="large" className="w-full h-full relative z-10" />
+              {/* Wish content display */}
+              <motion.div
+                className="absolute -bottom-12 left-1/2 transform -translate-x-1/2 text-xs text-center text-white/90 max-w-32 px-2 py-1 bg-black/20 rounded-lg backdrop-blur-sm"
+                animate={{ opacity: [0.7, 1, 0.7] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                {wishContent.length > 15 ? `${wishContent.substring(0, 15)}...` : wishContent}
+              </motion.div>
+              {/* Floating sparkles */}
+              {Array.from({ length: 6 }).map((_, i) => (
+                <motion.div
+                  key={`sparkle-${i}`}
+                  className="absolute w-1 h-1 bg-white rounded-full"
+                  style={{ left: `${20 + i * 15}%`, top: `${20 + i * 10}%` }}
+                  animate={{ y: [-20, -60, -100], opacity: [0, 1, 0], scale: [0.5, 1, 0.5] }}
+                  transition={{ duration: 3, repeat: Infinity, delay: i * 0.5, ease: 'easeOut' }}
+                />
+              ))}
             </div>
           </motion.div>
 
-          {/* Background lanterns */}
-          {Array.from({ length: 5 }).map((_, i) => {
-            const randomStyle = lanternStyles[Math.floor(Math.random() * lanternStyles.length)];
-            let imageSrc;
-            switch (randomStyle.id) {
-              case 'turtle':
-                imageSrc = turtleImage;
-                break;
-              case 'tiger':
-                imageSrc = tigerImage;
-                break;
-              case 'bird':
-                imageSrc = birdImage;
-                break;
-              case 'rabbit':
-                imageSrc = rabbitImage;
-                break;
-              default:
-                imageSrc = turtleImage;
-            }
-            
-            return (
-              <motion.div
-                key={i}
-                className="absolute w-16 h-20 opacity-60"
-                style={{
-                  left: `${20 + i * 15}%`,
-                  top: '60%',
-                }}
-                initial={{ y: 50, opacity: 0.6 }}
-                animate={{ y: -200, opacity: 0 }}
-                transition={{ 
-                  duration: 8,
-                  delay: i * 0.5,
-                  ease: "easeOut"
-                }}
-              >
-                <img 
-                  src={imageSrc} 
-                  alt={`${randomStyle.id} lantern`}
-                  className="w-full h-full object-contain transform scale-[1.95]"
-                />
-              </motion.div>
-            );
-          })}
+          {/* Background lanterns - Centered formation */}
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute left-1/2 top-2/3 transform -translate-x-1/2 -translate-y-1/2">
+              {Array.from({ length: 5 }).map((_, i) => {
+                const randomStyle = lanternStyles[Math.floor(Math.random() * lanternStyles.length)];
+                const positions = [
+                  { x: -160, y: 10 },
+                  { x: -80, y: -20 },
+                  { x: 0, y: 0 },
+                  { x: 80, y: -20 },
+                  { x: 160, y: 10 },
+                ];
+                const position = positions[i];
+                return (
+                  <motion.div
+                    key={i}
+                    className="absolute w-10 h-12 sm:w-14 sm:h-17 opacity-75"
+                    style={{ left: `${position.x}px`, top: `${position.y + 80}px`, transform: 'translate(-50%, -50%)' }}
+                    initial={{ y: 120, opacity: 0.8, scale: 0.9 }}
+                    animate={{ y: -400, opacity: 0, scale: 0.2, x: [0, Math.sin(i) * 8, -Math.sin(i) * 6, 0] }}
+                    transition={{ duration: 8.5, delay: i * 0.4, ease: 'easeOut' }}
+                  >
+                    <div className="relative">
+                      <motion.div
+                        className="absolute inset-0 rounded-full blur-sm opacity-50"
+                        style={{ background: `radial-gradient(circle, #ff8a6550 0%, transparent 60%)` }}
+                        animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.6, 0.3] }}
+                        transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut', delay: i * 0.2 }}
+                      />
+                      <LanternRenderer style={randomStyle.id} size="small" className="w-full h-full relative z-10" />
+                      {Array.from({ length: 2 }).map((_, j) => (
+                        <motion.div
+                          key={`trail-${i}-${j}`}
+                          className="absolute w-0.5 h-0.5 bg-accent rounded-full"
+                          style={{ left: '50%', top: '100%' }}
+                          animate={{ y: [0, 20, 40], opacity: [0.8, 0.4, 0], scale: [1, 0.5, 0] }}
+                          transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.4 + j * 0.3, ease: 'easeOut' }}
+                        />
+                      ))}
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
 
-          <h2 className="text-2xl mb-4">願望正在升空...</h2>
-          <p className="text-muted-foreground">讓星空見證你的心願</p>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1, duration: 1 }}>
+            <h2 className="text-2xl mb-4 bg-gradient-to-r from-accent to-soft-orange bg-clip-text text-transparent">願望正在升空...</h2>
+            <p className="text-muted-foreground mb-2">讓星空見證你的心願</p>
+            <motion.p className="text-sm text-muted-foreground/70 italic" animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 3, repeat: Infinity }}>
+              願你被溫柔看見，願所有美好都如期而至
+            </motion.p>
+          </motion.div>
         </div>
       </div>
     );
   }
 
-  // 若樣式/類別清單還在載入，在第一步先顯示載入/錯誤（避免到確認時才發現沒 ID）
+  // 上方固定欄：載入/錯誤提示（style/category）
   const metaBanner = (currentStep === 'style' || currentStep === 'category') && (
     <>
-      {metaLoading && <p className="text-sm text-muted-foreground mb-4">載入樣式/類別中...</p>}
-      {metaError && <p className="text-sm text-destructive mb-4">{metaError}</p>}
+      {metaLoading && <p className="text-sm text-muted-foreground mt-3">載入樣式/類別中...</p>}
+      {metaError && <p className="text-sm text-destructive mt-3">{metaError}</p>}
     </>
   );
 
   return (
-    <div className="min-h-screen flex flex-col px-4 py-8">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <Button
-          variant="ghost"
-          onClick={() => currentStep === 'style' ? onNavigate('landing') : prevStep()}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          {currentStep === 'style' ? '返回首頁' : '上一步'}
-        </Button>
-        
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-accent" />
-          <span className="text-sm text-muted-foreground">點數: {userPoints}</span>
+    <div className="min-h-screen flex flex-col">
+      {/* Fixed Header */}
+      <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-b from-[#0a0e27] via-[#1a1d3a] to-transparent backdrop-blur-sm">
+        <div className="px-4 py-4">
+          <div className="flex items-center justify-between mb-6">
+            <Button
+              variant="ghost"
+              onClick={() => (currentStep === 'style' ? onNavigate('landing') : prevStep())}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              {currentStep === 'style' ? '返回首頁' : '上一步'}
+            </Button>
+
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-accent" />
+              <span className="text-sm text-muted-foreground">點數: {userPoints}</span>
+            </div>
+          </div>
+
+          {/* Progress */}
+          <div className="max-w-md mx-auto w-full">
+            <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
+              <span>選擇天燈</span>
+              <span>願望類型</span>
+              <span>填寫內容</span>
+              <span>確認</span>
+            </div>
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-[#ff8a65] to-[#ffb74d] transition-all duration-300"
+                style={{
+                  width:
+                    currentStep === 'style' ? '25%' :
+                    currentStep === 'category' ? '50%' :
+                    currentStep === 'content' ? '75%' : '100%',
+                }}
+              />
+            </div>
+
+            {metaBanner}
+          </div>
         </div>
       </div>
 
-      {/* Progress */}
-      <div className="max-w-md mx-auto mb-8 w-full">
-        <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
-          <span>選擇天燈</span>
-          <span>願望類型</span>
-          <span>填寫內容</span>
-          <span>確認</span>
-        </div>
-        <div className="h-2 bg-muted rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-gradient-to-r from-[#ff8a65] to-[#ffb74d] transition-all duration-300"
-            style={{ 
-              width: currentStep === 'style' ? '25%' : 
-                     currentStep === 'category' ? '50%' : 
-                     currentStep === 'content' ? '75%' : '100%' 
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Step Content */}
-      <div className="flex-1 flex items-center justify-center">
-        <div className="w-full max-w-4xl mx-auto">
+      {/* Step Content with top padding */}
+      <div className="flex-1 flex pt-32">
+        <div className="w-full max-w-4xl mx-auto flex flex-col px-4">
           <AnimatePresence mode="wait">
             {/* Step 1: Style Selection */}
             {currentStep === 'style' && (
@@ -336,52 +380,53 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className="text-center"
+                className="h-full flex flex-col"
               >
-                <h2 className="text-2xl mb-2">選擇你的天燈樣式</h2>
-                {metaBanner}
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8 max-w-3xl mx-auto">
-                  {lanternStyles.map((style) => (
-                    <Card 
-                      key={style.id}
-                      className={`p-4 cursor-pointer transition-all duration-300 ${
-                        selectedStyle === style.id 
-                          ? 'border-accent bg-accent/10' 
-                          : 'border-border hover:border-accent/50'
-                      }`}
-                      onClick={() => setSelectedStyle(style.id)}
-                    >
-                      <div className="text-center">
-                        <LanternRenderer style={style.id} />
-                        
-                        <h3 className="mb-2 mt-4">{style.name}</h3>
-                        
-                        <Badge 
-                          variant={style.points === 0 ? "secondary" : "outline"} 
-                          className={`mb-2 ${style.points > 0 ? 'border-accent text-accent' : ''}`}
-                        >
-                          {style.points === 0 ? '免費' : `${style.points} 點數`}
-                        </Badge>
-                        
-                        <p className="text-xs text-muted-foreground">
-                          {style.description}
-                        </p>
-                        
-                        {style.points > userPoints && (
-                          <p className="text-xs text-destructive mt-2">
-                            點數不足，需要更多點數
-                          </p>
-                        )}
-                      </div>
-                    </Card>
-                  ))}
+                <div className="text-center mb-6 flex-shrink-0">
+                  <h2 className="text-2xl">選擇你的天燈樣式</h2>
                 </div>
 
-                <Button onClick={nextStep} size="lg" className="px-8" disabled={metaLoading}>
-                  <ArrowRight className="w-4 h-4 mr-2" />
-                  下一步
-                </Button>
+                <div className="flex-1 overflow-y-auto px-4 -mx-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-5xl mx-auto pb-6 pt-8">
+                    {lanternStyles.map((style) => (
+                      <Card
+                        key={style.id}
+                        className={`p-4 cursor-pointer transition-all duration-300 overflow-visible ${
+                          selectedStyle === style.id ? 'border-accent bg-accent/10' : 'border-border hover:border-accent/50'
+                        }`}
+                        onClick={() => setSelectedStyle(style.id)}
+                      >
+                        <div className="text-center overflow-visible">
+                          <div className="overflow-visible relative -mt-6 mb-2">
+                            <LanternRenderer style={style.id} />
+                          </div>
+
+                          <h3 className="mb-2 mt-4">{style.name}</h3>
+
+                          <Badge
+                            variant={style.points === 0 ? 'secondary' : 'outline'}
+                            className={`mb-2 ${style.points > 0 ? 'border-accent text-accent' : ''}`}
+                          >
+                            {style.points === 0 ? '免費' : `${style.points} 點數`}
+                          </Badge>
+
+                          <p className="text-xs text-muted-foreground">{style.description}</p>
+
+                          {style.points > userPoints && (
+                            <p className="text-xs text-destructive mt-2">點數不足，需要更多點數</p>
+                          )}
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="text-center pt-6 flex-shrink-0">
+                  <Button onClick={nextStep} size="lg" className="px-8" disabled={metaLoading}>
+                    <ArrowRight className="w-4 h-4 mr-2" />
+                    下一步
+                  </Button>
+                </div>
               </motion.div>
             )}
 
@@ -392,11 +437,10 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className="text-center"
+                className="text-center flex-1 flex flex-col justify-center"
               >
-                <h2 className="text-2xl mb-2">選擇願望類型</h2>
-                {metaBanner}
-                
+                <h2 className="text-2xl mb-8">選擇願望類型</h2>
+
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
                   {wishCategories.map((category) => {
                     const Icon = category.icon;
@@ -404,18 +448,14 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
                       <Card
                         key={category.id}
                         className={`p-4 cursor-pointer transition-all duration-300 ${
-                          selectedCategory === category.id
-                            ? 'border-accent bg-accent/10'
-                            : 'border-border hover:border-accent/50'
+                          selectedCategory === category.id ? 'border-accent bg-accent/10' : 'border-border hover:border-accent/50'
                         }`}
                         onClick={() => setSelectedCategory(category.id)}
                       >
                         <div className="text-center">
                           <Icon className="w-8 h-8 mx-auto mb-3 text-accent" />
                           <h3 className="mb-2">{category.name}</h3>
-                          <p className="text-xs text-muted-foreground">
-                            {category.description}
-                          </p>
+                          <p className="text-xs text-muted-foreground">{category.description}</p>
                         </div>
                       </Card>
                     );
@@ -436,10 +476,10 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className="text-center"
+                className="text-center flex-1 flex flex-col justify-center"
               >
                 <h2 className="text-2xl mb-8">寫下你的心願</h2>
-                
+
                 <div className="mb-6">
                   <Textarea
                     placeholder="在這裡寫下你想說的話..."
@@ -450,11 +490,8 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
                     }`}
                     maxLength={200}
                   />
-                  <p className="text-xs text-muted-foreground mt-2 text-right">
-                    {wishContent.length}/200
-                  </p>
-                  
-                  {/* Content Warning */}
+                  <p className="text-xs text-muted-foreground mt-2 text-right">{wishContent.length}/200</p>
+
                   {showWarning && (
                     <motion.div
                       initial={{ opacity: 0, y: -10 }}
@@ -464,16 +501,13 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
                       <div className="flex items-start gap-3">
                         <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
                         <div>
-                          <p className="text-sm text-destructive/90 leading-relaxed">
-                            {contentWarning}
-                          </p>
+                          <p className="text-sm text-destructive/90 leading-relaxed">{contentWarning}</p>
                         </div>
                       </div>
                     </motion.div>
                   )}
                 </div>
 
-                {/* Suggestions */}
                 <div className="mb-8">
                   <p className="text-sm text-muted-foreground mb-3">或者選擇一個建議：</p>
                   <div className="flex flex-wrap gap-2 justify-center">
@@ -491,12 +525,7 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
                   </div>
                 </div>
 
-                <Button 
-                  onClick={nextStep} 
-                  size="lg" 
-                  className="px-8"
-                  disabled={!wishContent.trim() || showWarning}
-                >
+                <Button onClick={nextStep} size="lg" className="px-8" disabled={!wishContent.trim() || showWarning}>
                   <ArrowRight className="w-4 h-4 mr-2" />
                   下一步
                 </Button>
@@ -510,44 +539,33 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className="text-center"
+                className="text-center flex-1 flex flex-col justify-center"
               >
-                <h2 className="text-2xl mb-4">確認你的天燈</h2>
+                <h2 className="text-2xl mb-8">確認你的天燈</h2>
 
-                {submitError && (
-                  <p className="text-sm text-destructive mb-4">{submitError}</p>
-                )}
-                
+                {submitError && <p className="text-sm text-destructive mb-4">{submitError}</p>}
+
                 <Card className="p-8 mb-8 bg-card/50 backdrop-blur-sm">
                   <div className="flex flex-col items-center">
                     <LanternRenderer style={selectedStyle} size="large" />
-                    
+
                     <div className="max-w-sm mt-6">
-                      <p className="text-sm text-muted-foreground mb-2">
-                        樣式：{lanternStyles.find(s => s.id === selectedStyle)?.name}
-                      </p>
+                      <p className="text-sm text-muted-foreground mb-2">樣式：{lanternStyles.find(s => s.id === selectedStyle)?.name}</p>
                       <p className="text-sm text-muted-foreground mb-2">
                         願望類型：{wishCategories.find(c => c.id === selectedCategory)?.name}
                       </p>
-                      <p className="text-foreground bg-muted/50 p-4 rounded-lg">
-                        {wishContent}
-                      </p>
+                      <p className="text-foreground bg-muted/50 p-4 rounded-lg">{wishContent}</p>
                     </div>
                   </div>
                 </Card>
 
                 <div className="flex gap-4 justify-center">
-                  <Button 
-                    variant="outline"
-                    onClick={() => setCurrentStep('content')}
-                    className="px-6"
-                    disabled={submitting}
-                  >
+                  <Button variant="outline" onClick={() => setCurrentStep('content')} className="px-6" disabled={submitting}>
                     <Edit className="w-4 h-4 mr-2" />
                     修改內容
                   </Button>
-                  
-                  <Button 
+
+                  <Button
                     onClick={nextStep}
                     size="lg"
                     className="px-8 bg-gradient-to-r from-[#ff8a65] to-[#ffb74d] hover:from-[#ff7043] hover:to-[#ff9800]"
@@ -562,37 +580,21 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints }: LanternFl
 
             {/* Step 5: Complete */}
             {currentStep === 'complete' && (
-              <motion.div
-                key="complete"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="text-center"
-              >
+              <motion.div key="complete" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center flex-1 flex flex-col justify-center">
                 <div className="mb-8">
                   <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-r from-[#ff8a65] to-[#ffb74d] rounded-full flex items-center justify-center">
                     <Sparkles className="w-12 h-12 text-white" />
                   </div>
                   <h2 className="text-2xl mb-4">願望已放飛</h2>
-                  <p className="text-lg text-muted-foreground mb-8">
-                    願你被溫柔看見，願所有美好都如期而至
-                  </p>
+                  <p className="text-lg text-muted-foreground mb-8">願你被溫柔看見，願所有美好都如期而至</p>
                 </div>
 
                 <div className="flex gap-4 justify-center">
-                  <Button 
-                    onClick={() => onNavigate('landing')}
-                    variant="outline"
-                    size="lg"
-                    className="px-8"
-                  >
+                  <Button onClick={() => onNavigate('landing')} variant="outline" size="lg" className="px-8">
                     返回首頁
                   </Button>
-                  
-                  <Button 
-                    onClick={() => onNavigate('wish-wall')}
-                    size="lg"
-                    className="px-8"
-                  >
+
+                  <Button onClick={() => onNavigate('wish-wall')} size="lg" className="px-8">
                     觀看天燈星空牆
                   </Button>
                 </div>
