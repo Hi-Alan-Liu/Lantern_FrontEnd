@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { LandingPage } from './components/LandingPage';
 import { LanternFlow } from './components/LanternFlow';
 import { TaskCenter } from './components/TaskCenter';
@@ -22,6 +22,36 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>('landing');
   const [userPoints, setUserPoints] = useState(3); // Starting points
   const [userLanterns, setUserLanterns] = useState<UserLantern[]>([]);
+
+  const API_BASE = 'https://lantern-api.zeabur.app';
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const storedUserId = localStorage.getItem('X-User-Id') || '';
+        const res = await fetch(`${API_BASE}/api/user`, {
+          headers: {
+            Accept: 'application/json',
+            'X-User-Id': storedUserId,
+          },
+        });
+        if (!res.ok) throw new Error('取得點數失敗');
+
+        // 後端如果回傳新的 X-User-Id，更新本地
+        const newUserId = res.headers.get('X-User-Id');
+        if (newUserId) localStorage.setItem('X-User-Id', newUserId);
+
+        const json = await res.json();
+        if (alive && json?.statusCode === 200) {
+          setUserPoints(Number(json.contents?.points ?? 0));
+        }
+      } catch (err) {
+        console.error('[App] 載入使用者點數失敗：', err);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
 
   const navigateTo = (page: Page) => {
     setCurrentPage(page);
