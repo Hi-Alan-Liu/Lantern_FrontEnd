@@ -3,15 +3,77 @@ import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Textarea } from './ui/textarea';
 import { Badge } from './ui/badge';
-import { ArrowLeft, ArrowRight, Sparkles, Edit, Send, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Sparkles, Edit, Send, AlertTriangle, MessageCircle, MoreHorizontal, Gift, Frown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LanternRenderer } from './lantern/LanternRenderer';
-import { lanternStyles, wishCategories, suggestionTexts, LanternStyle, WishCategory, FlowStep } from './lantern/constants';
+import { suggestionTexts, LanternStyle, WishCategory, FlowStep } from './lantern/constants';
 import { checkContent } from './lantern/contentFilter';
 
-// ✅ API（保留）
+// ✅ API
 import { createLantern, getStyleList, getCategoryList } from './lantern/lanternService';
 import type { Style, Category } from './lantern/lantern';
+
+/** ------------------ 小工具：名稱/代碼 映射 ------------------ **/
+
+// 將任意字串標準化（小寫 + 去空白）
+const normalize = (s?: string) => (s ?? '').toLowerCase().trim();
+
+/** 把後端 style 映射為前端可用的 key（用於 LanternRenderer & 本地 state） */
+function mapStyleToKey(style: Style): LanternStyle {
+  // 優先使用後端可能提供的 code 欄位
+  const anyStyle: any = style;
+  const code = normalize(anyStyle.code);
+  if (code) {
+    // 僅接受我們現有的 renderer key，否則再降級匹配
+    if (['turtle','tiger','bird','rabbit','sunflower','otter','cat','hedgehog','elephant'].includes(code)) {
+      return code as LanternStyle;
+    }
+  }
+
+  // 名稱匹配（中英）
+  const name = normalize(style.name);
+  if (/(turtle|龜|烏龜)/.test(name)) return 'turtle';
+  if (/(tiger|虎|老虎)/.test(name)) return 'tiger';
+  if (/(bird|鳥|小鳥)/.test(name)) return 'bird';
+  if (/(rabbit|兔|兔子)/.test(name)) return 'rabbit';
+  if (/(sunflower|向日葵)/.test(name)) return 'sunflower';
+  if (/(otter|水獺)/.test(name)) return 'otter';
+  if (/(cat|貓)/.test(name)) return 'cat';
+  if (/(hedgehog|刺蝟|刺猬)/.test(name)) return 'hedgehog';
+  if (/(elephant|大象)/.test(name)) return 'elephant';
+
+  // 預設
+  return 'turtle';
+}
+
+/** 把後端 category 映射為我們的標準鍵（供 suggestionTexts & UI 使用） */
+function mapCategoryToKey(cat: Category): WishCategory {
+  const anyCat: any = cat;
+  const code = normalize(anyCat.code);
+  if (['wish','talk','thanks','vent','other'].includes(code)) return code as WishCategory;
+
+  const name = normalize(cat.name);
+  if (/(wish|願|許願|祈願|心願)/.test(name)) return 'wish';
+  if (/(talk|訴說|傾訴|說說|分享)/.test(name)) return 'talk';
+  if (/(thanks|感謝|感恩|謝謝)/.test(name)) return 'thanks';
+  if (/(vent|發洩|抱怨|小小發洩|吐槽)/.test(name)) return 'vent';
+  return 'other';
+}
+
+/** icon 對照（類別） */
+const CategoryIconMap: Record<WishCategory, React.ComponentType<any>> = {
+  wish: Sparkles,
+  talk: MessageCircle,
+  thanks: Gift,
+  vent: Frown,
+  other: MoreHorizontal,
+};
+
+/** UI 展示用型別（由後端資料加工而來） */
+type UIStyle = { key: LanternStyle; name: string; description?: string; points: number; backendId: number };
+type UICategory = { key: WishCategory; name: string; description?: string; backendId: number; icon: React.ComponentType<any> };
+
+/** ------------------ Component ------------------ **/
 
 interface LanternFlowProps {
   onNavigate: (page: 'landing' | 'lantern-flow' | 'task-center' | 'wish-wall') => void;
@@ -29,31 +91,48 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
   const [contentWarning, setContentWarning] = useState('');
   const [showWarning, setShowWarning] = useState(false);
 
-  // ✅ 後端 meta
+  // 後端 meta（原始）
   const [styleList, setStyleList] = useState<Style[]>([]);
   const [categoryList, setCategoryList] = useState<Category[]>([]);
   const [metaLoading, setMetaLoading] = useState<boolean>(true);
   const [metaError, setMetaError] = useState<string | null>(null);
 
-  // ✅ 送出狀態
+  // 送出狀態
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const normalize = (s?: string) => s?.toLowerCase().trim() ?? '';
-
-  // ✅ 名稱(code/name) → id 對照（用後端回來的 name 做 key；若後端提供 code，可改成 code）
-  const styleCodeToId = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const s of styleList) map.set(normalize(s.name), s.id);
-    return map;
+  // 從後端原始資料 -> UI 可用陣列（帶 backendId）
+  const uiStyles: UIStyle[] = useMemo(() => {
+    return styleList.map((s: any) => {
+      const key = mapStyleToKey(s);
+      return {
+        key,
+        name: s.displayName,
+        description: s.desc ?? '',
+        points: s.point ?? 0,
+        backendId: s.id,
+      };
+    });
   }, [styleList]);
 
-  const categoryCodeToId = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const c of categoryList) map.set(normalize(c.name), c.id);
-    return map;
+  const uiCats: UICategory[] = useMemo(() => {
+    return categoryList.map((c: any) => {
+      const key = mapCategoryToKey(c);
+      return {
+        key,
+        name: c.displayName,
+        description: c.desc ?? '',
+        backendId: c.id,
+        icon: CategoryIconMap[key] ?? Sparkles,
+      };
+    });
   }, [categoryList]);
 
+  // 以 key 找 UI style/category（方便顯示名稱/點數）
+  const currentUIStyle = useMemo(() => uiStyles.find(s => s.key === selectedStyle) ?? uiStyles[0], [uiStyles, selectedStyle]);
+  const currentUICategory = useMemo(() => uiCats.find(c => c.key === selectedCategory) ?? uiCats[0], [uiCats, selectedCategory]);
+
+  // 載入後端 meta
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -69,7 +148,8 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
         setMetaError(null);
       } catch (e: any) {
         if (!alive) return;
-        setMetaError(e?.message ?? '載入樣式/類別失敗');
+        setMetaError(e?.message ?? '載入樣式/類別失敗（已使用離線預設）');
+        // 若需要：也可在此塞預設 styleList/categoryList 作 fallback
       } finally {
         if (alive) setMetaLoading(false);
       }
@@ -77,16 +157,22 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
     return () => { alive = false; };
   }, []);
 
-  const getSelectedStyleData = () => {
-    return lanternStyles.find(style => style.id === selectedStyle)!;
-  };
+  // 後端資料就緒後，初始化預設選擇
+  useEffect(() => {
+    if (uiStyles.length && !selectedStyle) {
+      setSelectedStyle(uiStyles[0].key);
+    }
+    if (uiCats.length && !selectedCategory) {
+      setSelectedCategory(uiCats[0].key);
+    }
+  }, [uiStyles, uiCats]); // eslint-disable-line
 
   const nextStep = async () => {
     switch (currentStep) {
       case 'style': {
-        const styleData = getSelectedStyleData();
-        if (styleData.points > userPoints) {
-          onNavigate('task-center');
+        const pointsNeed = currentUIStyle?.points ?? 0;
+        if (pointsNeed > userPoints) {
+          onNavigate('task-center'); // 去任務中心賺點數
           return;
         }
         setCurrentStep('category');
@@ -110,12 +196,11 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
       }
 
       case 'confirm': {
-        // ✅ 轉成後端需要的 ID
-        const styleId = styleCodeToId.get(normalize(selectedStyle));
-        const categoryId = categoryCodeToId.get(normalize(selectedCategory));
-
-        if (!styleId || !categoryId) {
-          setSubmitError('無法解析樣式或類別，請稍後再試');
+        // 從 UI 選擇找到 backendId
+        const styleBackendId = currentUIStyle?.backendId;
+        const categoryBackendId = currentUICategory?.backendId;
+        if (!styleBackendId || !categoryBackendId) {
+          setSubmitError('無法解析樣式或類別（ID 不存在），請稍後再試');
           return;
         }
 
@@ -123,27 +208,25 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
           setSubmitError(null);
           setSubmitting(true);
 
-          // ✅ 呼叫建立 API
+          // 呼叫建立 API
           await createLantern({
-            styleId,
-            categoryId,
+            styleId: styleBackendId,
+            categoryId: categoryBackendId,
             text: wishContent.trim(),
           });
 
-          // ✅ 扣點（如需）
-          const selectedStyleData = getSelectedStyleData();
-          if (selectedStyleData.points > 0) {
-            onSpendPoints(selectedStyleData.points);
-          }
+          // 扣點（如需要）
+          const cost = currentUIStyle?.points ?? 0;
+          if (cost > 0) onSpendPoints(cost);
 
-          // ✅ 本地加入使用者天燈（供 WishWall 動畫）
+          // 本地加入（供 WishWall 顯示個人天燈等）
           onAddLantern({
             style: selectedStyle,
             category: selectedCategory,
             content: wishContent,
           });
 
-          // ✅ 進入動畫 → 完成
+          // 動畫 → 完成
           setCurrentStep('animation');
           setIsAnimating(true);
           setTimeout(() => {
@@ -199,36 +282,24 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
     }
   };
 
+  /** ------------------ 動畫頁 ------------------ **/
   if (currentStep === 'animation') {
     return (
       <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
         <div className="text-center">
-          {/* Main user lantern with enhanced effects */}
           <motion.div
             className="relative mx-auto mb-8"
             initial={{ y: 150, opacity: 0.9, scale: 0.6 }}
-            animate={{
-              y: -200,
-              opacity: 0,
-              scale: 0.1,
-              x: [0, 8, -6, 4, 0],
-            }}
+            animate={{ y: -200, opacity: 0, scale: 0.1, x: [0, 8, -6, 4, 0] }}
             transition={{ duration: 10, ease: 'easeOut' }}
           >
             <div className="w-32 h-40 mx-auto relative">
-              {/* Main glow effect */}
               <motion.div
                 className="absolute inset-0 rounded-full blur-lg"
-                style={{
-                  background: `radial-gradient(circle, #ff8a65 0%, #ffb74d 50%, transparent 100%)`,
-                }}
-                animate={{
-                  scale: [1, 1.5, 1],
-                  opacity: [0.6, 0.9, 0.6],
-                }}
+                style={{ background: `radial-gradient(circle, #ff8a65 0%, #ffb74d 50%, transparent 100%)` }}
+                animate={{ scale: [1, 1.5, 1], opacity: [0.6, 0.9, 0.6] }}
                 transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
               />
-              {/* Outer glow ring */}
               <motion.div
                 className="absolute -inset-4 rounded-full blur-xl opacity-40"
                 style={{ background: `radial-gradient(circle, #ff8a65 0%, transparent 60%)` }}
@@ -236,7 +307,6 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
                 transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
               />
               <LanternRenderer style={selectedStyle} size="large" className="w-full h-full relative z-10" />
-              {/* Wish content display */}
               <motion.div
                 className="absolute -bottom-12 left-1/2 transform -translate-x-1/2 text-xs text-center text-white/90 max-w-32 px-2 py-1 bg-black/20 rounded-lg backdrop-blur-sm"
                 animate={{ opacity: [0.7, 1, 0.7] }}
@@ -244,7 +314,6 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
               >
                 {wishContent.length > 15 ? `${wishContent.substring(0, 15)}...` : wishContent}
               </motion.div>
-              {/* Floating sparkles */}
               {Array.from({ length: 6 }).map((_, i) => (
                 <motion.div
                   key={`sparkle-${i}`}
@@ -257,17 +326,12 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
             </div>
           </motion.div>
 
-          {/* Background lanterns - Centered formation */}
           <div className="absolute inset-0 pointer-events-none">
             <div className="absolute left-1/2 top-2/3 transform -translate-x-1/2 -translate-y-1/2">
               {Array.from({ length: 5 }).map((_, i) => {
-                const randomStyle = lanternStyles[Math.floor(Math.random() * lanternStyles.length)];
+                const s = uiStyles[i % (uiStyles.length || 1)]?.key ?? 'turtle';
                 const positions = [
-                  { x: -160, y: 10 },
-                  { x: -80, y: -20 },
-                  { x: 0, y: 0 },
-                  { x: 80, y: -20 },
-                  { x: 160, y: 10 },
+                  { x: -160, y: 10 }, { x: -80, y: -20 }, { x: 0, y: 0 }, { x: 80, y: -20 }, { x: 160, y: 10 },
                 ];
                 const position = positions[i];
                 return (
@@ -286,7 +350,7 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
                         animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.6, 0.3] }}
                         transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut', delay: i * 0.2 }}
                       />
-                      <LanternRenderer style={randomStyle.id} size="small" className="w-full h-full relative z-10" />
+                      <LanternRenderer style={s} size="small" className="w-full h-full relative z-10" />
                       {Array.from({ length: 2 }).map((_, j) => (
                         <motion.div
                           key={`trail-${i}-${j}`}
@@ -315,7 +379,7 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
     );
   }
 
-  // 上方固定欄：載入/錯誤提示（style/category）
+  /** ------------------ 共同 UI：頂部進度 + 載入提示 ------------------ **/
   const metaBanner = (currentStep === 'style' || currentStep === 'category') && (
     <>
       {metaLoading && <p className="text-sm text-muted-foreground mt-3">載入樣式/類別中...</p>}
@@ -323,6 +387,7 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
     </>
   );
 
+  /** ------------------ 主畫面 ------------------ **/
   return (
     <div className="min-h-screen flex flex-col">
       {/* Fixed Header */}
@@ -363,7 +428,6 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
                 }}
               />
             </div>
-
             {metaBanner}
           </div>
         </div>
@@ -388,17 +452,21 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
 
                 <div className="flex-1 overflow-y-auto px-4 -mx-4">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-5xl mx-auto pb-6 pt-8">
-                    {lanternStyles.map((style) => (
+                    {(uiStyles.length ? uiStyles : [
+                      // fallback 極簡預設（若 API 壞掉）
+                      { key: 'turtle', name: '小烏龜', description: '穩重守護', points: 0, backendId: -1 },
+
+                    ]).map((style) => (
                       <Card
-                        key={style.id}
+                        key={style.key}
                         className={`p-4 cursor-pointer transition-all duration-300 overflow-visible ${
-                          selectedStyle === style.id ? 'border-accent bg-accent/10' : 'border-border hover:border-accent/50'
+                          selectedStyle === style.key ? 'border-accent bg-accent/10' : 'border-border hover:border-accent/50'
                         }`}
-                        onClick={() => setSelectedStyle(style.id)}
+                        onClick={() => setSelectedStyle(style.key)}
                       >
                         <div className="text-center overflow-visible">
                           <div className="overflow-visible relative -mt-6 mb-2">
-                            <LanternRenderer style={style.id} />
+                            <LanternRenderer style={style.key} />
                           </div>
 
                           <h3 className="mb-2 mt-4">{style.name}</h3>
@@ -442,15 +510,19 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
                 <h2 className="text-2xl mb-8">選擇願望類型</h2>
 
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-                  {wishCategories.map((category) => {
+                  {(uiCats.length ? uiCats : [
+                    { key: 'wish', name: '許願', description: '把心願寫下', icon: Sparkles, backendId: -1 },
+                    { key: 'talk', name: '傾訴', description: '說說心事', icon: MessageCircle, backendId: -2 },
+                    { key: 'thanks', name: '感謝', description: '道一聲謝謝', icon: Gift, backendId: -3 },
+                  ]).map((category) => {
                     const Icon = category.icon;
                     return (
                       <Card
-                        key={category.id}
+                        key={category.key}
                         className={`p-4 cursor-pointer transition-all duration-300 ${
-                          selectedCategory === category.id ? 'border-accent bg-accent/10' : 'border-border hover:border-accent/50'
+                          selectedCategory === category.key ? 'border-accent bg-accent/10' : 'border-border hover:border-accent/50'
                         }`}
-                        onClick={() => setSelectedCategory(category.id)}
+                        onClick={() => setSelectedCategory(category.key)}
                       >
                         <div className="text-center">
                           <Icon className="w-8 h-8 mx-auto mb-3 text-accent" />
@@ -511,7 +583,7 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
                 <div className="mb-8">
                   <p className="text-sm text-muted-foreground mb-3">或者選擇一個建議：</p>
                   <div className="flex flex-wrap gap-2 justify-center">
-                    {suggestionTexts[selectedCategory].map((suggestion, index) => (
+                    {(suggestionTexts[selectedCategory] ?? suggestionTexts['wish']).map((suggestion, index) => (
                       <Button
                         key={index}
                         variant="outline"
@@ -550,10 +622,8 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
                     <LanternRenderer style={selectedStyle} size="large" />
 
                     <div className="max-w-sm mt-6">
-                      <p className="text-sm text-muted-foreground mb-2">樣式：{lanternStyles.find(s => s.id === selectedStyle)?.name}</p>
-                      <p className="text-sm text-muted-foreground mb-2">
-                        願望類型：{wishCategories.find(c => c.id === selectedCategory)?.name}
-                      </p>
+                      <p className="text-sm text-muted-foreground mb-2">樣式：{currentUIStyle?.name ?? '—'}</p>
+                      <p className="text-sm text-muted-foreground mb-2">願望類型：{currentUICategory?.name ?? '—'}</p>
                       <p className="text-foreground bg-muted/50 p-4 rounded-lg">{wishContent}</p>
                     </div>
                   </div>
