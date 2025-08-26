@@ -1,5 +1,5 @@
 import React from 'react';
-import { LanternStyle } from './constants';
+import { LanternStyleKey } from './lantern';
 import turtleImage from '@/assets/119410796dbf217b520e3ff49127f06a9a97556a.png';
 import tigerImage from '@/assets/286622944f4d946eee43a3e8b30fba7651a5c289.png';
 import birdImage from '@/assets/b952c75101ea25b8f341fc27f8706bc1c5ee7b0f.png';
@@ -11,7 +11,7 @@ import rabbitImage from '@/assets/0f8c4820cc2c3965bbd2baf4d47b6fb46030dfb4.png';
 import elephantImage from '@/assets/25fe6106c900c7c17f704b0008c6a6c3adbab290.png';
 
 interface LanternRendererProps {
-  style: LanternStyle;
+  style: LanternStyleKey;
   size?: 'small' | 'large';
   className?: string;
 }

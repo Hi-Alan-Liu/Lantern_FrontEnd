@@ -1,64 +1,54 @@
-// 後端代碼型別
-export type LanternStyleCode = 'turtle' | 'tiger' | 'bird' | 'rabbit';
-export type CategoryCode = 'wish' | 'talk' | 'thanks' | 'vent' | 'other';
-
-// 前端查詢參數（對應 DefaultTableRequest）
-export interface TableQuery {
-  page?: number;
-  pageSize?: number;
-  search?: string;
+// ===== 後端 DTO（保持可能的命名）=====
+export interface ApiEnvelope<T> {
+  statusCode: number;
+  message?: string;
+  contents: T;
 }
 
-// 後端：清單包裝（BaseListQueryResponse<T>）
-export interface BaseList<T> {
+// -------- Paged ----------
+export interface Paged<T> {
   totalCount: number;
   dataList: T[];
 }
 
-// 後端：外層包裝（DefaultResponse<T>）
-export interface ApiEnvelope<T> {
-  statusCode: number;
-  message?: string | null;
-  contents: T;
-}
-
-// 造型
-export interface Style {
+// -------- DTO from backend ----------
+export interface StyleDTO {
   id: number;
-  name: string; 
-  displayName: string;
-  desc?: string | null;
-  gradient?: string | null;
-  shadowColor?: string | null;
-  point: number;
-  sortOrder: number;
+  name?: string;
+  displayName?: string;
+  desc?: string;
+  point?: number;
+  gradient?: string;
+  shadowColor?: string;
+  code?: string;
 }
 
-// 類別
-export interface Category {
+export interface CategoryDTO {
   id: number;
-  name: string;
-  displayName: string;
-  desc?: string | null;
-  sortOrder: number;
+  name?: string;
+  displayName?: string;
+  desc?: string;
+  code?: string;
 }
 
-// 天燈清單
-export interface Lantern {
+// -------- Lantern DTO ----------
+// 後端回傳的天燈
+export interface LanternDTO {
   id: number;
-  styleId: number;
-  style: string;
-  styleName: string;
-  categoryId: number;
-  category: string;
-  categoryName: string;
-  text: string;
-  createdAt: string;
+  style?: string;
+  styleId?: number;
+  category?: string;
+  categoryId?: number;
+  categoryName?: string;
+  text?: string; 
+  content?: string;
+  createdAt?: string;
+  userId?: number;
 }
 
-// 建立天燈
-export interface CreateLanternRequest {
-  styleId: number;
-  categoryId: number;
-  text: string;
-}
+// 你原本前端用的 key
+export type LanternStyleKey =
+  | 'turtle' | 'tiger' | 'bird' | 'sunflower'
+  | 'otter' | 'cat' | 'hedgehog' | 'rabbit' | 'elephant';
+
+export type WishCategory = 'wish' | 'talk' | 'thanks' | 'vent' | 'other';

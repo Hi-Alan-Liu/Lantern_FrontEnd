@@ -3,35 +3,40 @@ import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Textarea } from './ui/textarea';
 import { Badge } from './ui/badge';
-import { ArrowLeft, ArrowRight, Sparkles, Edit, Send, AlertTriangle, MessageCircle, MoreHorizontal, Gift, Frown } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Sparkles,
+  Edit,
+  Send,
+  AlertTriangle,
+  MessageCircle,
+  MoreHorizontal,
+  Gift,
+  Frown,
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { LanternRenderer } from './lantern/LanternRenderer';
-import { suggestionTexts, LanternStyle, WishCategory, FlowStep } from './lantern/constants';
+import { suggestionTexts, FlowStep } from './lantern/constants';
+import type { WishCategory, LanternStyleKey, StyleDTO, CategoryDTO } from './lantern/lantern';
 import { checkContent } from './lantern/contentFilter';
 
-// ✅ API
+// ✅ API（保留）
 import { createLantern, getStyleList, getCategoryList } from './lantern/lanternService';
-import type { Style, Category } from './lantern/lantern';
 
-/** ------------------ 小工具：名稱/代碼 映射 ------------------ **/
+/* ------------------ 小工具：名稱/代碼 映射 ------------------ */
 
-// 將任意字串標準化（小寫 + 去空白）
 const normalize = (s?: string) => (s ?? '').toLowerCase().trim();
 
-/** 把後端 style 映射為前端可用的 key（用於 LanternRenderer & 本地 state） */
-function mapStyleToKey(style: Style): LanternStyle {
-  // 優先使用後端可能提供的 code 欄位
-  const anyStyle: any = style;
-  const code = normalize(anyStyle.code);
-  if (code) {
-    // 僅接受我們現有的 renderer key，否則再降級匹配
-    if (['turtle','tiger','bird','rabbit','sunflower','otter','cat','hedgehog','elephant'].includes(code)) {
-      return code as LanternStyle;
-    }
+/** Style → 前端 key（給 LanternRenderer & 本地 state） */
+function mapStyleToKey(style: StyleDTO): LanternStyleKey {
+  const anyStyle = style as any;
+  const code = normalize(anyStyle.code ?? anyStyle.Name ?? anyStyle.name);
+  if (['turtle','tiger','bird','rabbit','sunflower','otter','cat','hedgehog','elephant'].includes(code)) {
+    return code as LanternStyleKey;
   }
 
-  // 名稱匹配（中英）
-  const name = normalize(style.name);
+  const name = normalize(anyStyle.displayName ?? anyStyle.name);
   if (/(turtle|龜|烏龜)/.test(name)) return 'turtle';
   if (/(tiger|虎|老虎)/.test(name)) return 'tiger';
   if (/(bird|鳥|小鳥)/.test(name)) return 'bird';
@@ -41,18 +46,16 @@ function mapStyleToKey(style: Style): LanternStyle {
   if (/(cat|貓)/.test(name)) return 'cat';
   if (/(hedgehog|刺蝟|刺猬)/.test(name)) return 'hedgehog';
   if (/(elephant|大象)/.test(name)) return 'elephant';
-
-  // 預設
   return 'turtle';
 }
 
-/** 把後端 category 映射為我們的標準鍵（供 suggestionTexts & UI 使用） */
-function mapCategoryToKey(cat: Category): WishCategory {
-  const anyCat: any = cat;
-  const code = normalize(anyCat.code);
+/** Category → 前端 key（供 suggestionTexts & UI 使用） */
+function mapCategoryToKey(cat: CategoryDTO): WishCategory {
+  const anyCat = cat as any;
+  const code = normalize(anyCat.code ?? anyCat.name);
   if (['wish','talk','thanks','vent','other'].includes(code)) return code as WishCategory;
 
-  const name = normalize(cat.name);
+  const name = normalize(anyCat.displayName ?? anyCat.name);
   if (/(wish|願|許願|祈願|心願)/.test(name)) return 'wish';
   if (/(talk|訴說|傾訴|說說|分享)/.test(name)) return 'talk';
   if (/(thanks|感謝|感恩|謝謝)/.test(name)) return 'thanks';
@@ -60,8 +63,8 @@ function mapCategoryToKey(cat: Category): WishCategory {
   return 'other';
 }
 
-/** icon 對照（類別） */
-const CategoryIconMap: Record<WishCategory, React.ComponentType<any>> = {
+type IconComp = React.ComponentType<{ className?: string }>;
+const CategoryIconMap: Record<WishCategory, IconComp> = {
   wish: Sparkles,
   talk: MessageCircle,
   thanks: Gift,
@@ -69,22 +72,34 @@ const CategoryIconMap: Record<WishCategory, React.ComponentType<any>> = {
   other: MoreHorizontal,
 };
 
-/** UI 展示用型別（由後端資料加工而來） */
-type UIStyle = { key: LanternStyle; name: string; description?: string; points: number; backendId: number };
-type UICategory = { key: WishCategory; name: string; description?: string; backendId: number; icon: React.ComponentType<any> };
+/** UI 展示型別（由後端資料加工而來） */
+type UIStyle = {
+  key: LanternStyleKey;
+  name: string;
+  description?: string;
+  points: number;
+  backendId: number;
+};
+type UICategory = {
+  key: WishCategory;
+  name: string;
+  description?: string;
+  backendId: number;
+  icon: IconComp;
+};
 
-/** ------------------ Component ------------------ **/
+/* ------------------ Component ------------------ */
 
 interface LanternFlowProps {
   onNavigate: (page: 'landing' | 'lantern-flow' | 'task-center' | 'wish-wall') => void;
   userPoints: number;
   onSpendPoints: (points: number) => boolean;
-  onAddLantern: (lantern: { style: string; category: string; content: string; }) => void;
+  onAddLantern: (lantern: { style: string; category: string; content: string }) => void;
 }
 
 export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLantern }: LanternFlowProps) {
   const [currentStep, setCurrentStep] = useState<FlowStep>('style');
-  const [selectedStyle, setSelectedStyle] = useState<LanternStyle>('turtle');
+  const [selectedStyle, setSelectedStyle] = useState<LanternStyleKey>('turtle');
   const [selectedCategory, setSelectedCategory] = useState<WishCategory>('wish');
   const [wishContent, setWishContent] = useState('');
   const [isAnimating, setIsAnimating] = useState(false);
@@ -92,8 +107,8 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
   const [showWarning, setShowWarning] = useState(false);
 
   // 後端 meta（原始）
-  const [styleList, setStyleList] = useState<Style[]>([]);
-  const [categoryList, setCategoryList] = useState<Category[]>([]);
+  const [styleList, setStyleList] = useState<StyleDTO[]>([]);
+  const [categoryList, setCategoryList] = useState<CategoryDTO[]>([]);
   const [metaLoading, setMetaLoading] = useState<boolean>(true);
   const [metaError, setMetaError] = useState<string | null>(null);
 
@@ -101,36 +116,37 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // 從後端原始資料 -> UI 可用陣列（帶 backendId）
+  // 後端 → UI 可用
   const uiStyles: UIStyle[] = useMemo(() => {
-    return styleList.map((s: any) => {
+    return (styleList ?? []).map((s: any) => {
       const key = mapStyleToKey(s);
-      return {
-        key,
-        name: s.displayName,
-        description: s.desc ?? '',
-        points: s.point ?? 0,
-        backendId: s.id,
-      };
+      const name = s.displayName ?? s.name ?? s.Name ?? '—';
+      const description = s.desc ?? s.description ?? s.Desc ?? '';
+      const points = s.point ?? s.points ?? s.Point ?? 0;
+      const backendId = s.id ?? s.Id;
+      return { key, name, description, points, backendId } as UIStyle;
     });
   }, [styleList]);
 
   const uiCats: UICategory[] = useMemo(() => {
-    return categoryList.map((c: any) => {
+    return (categoryList ?? []).map((c: any) => {
       const key = mapCategoryToKey(c);
-      return {
-        key,
-        name: c.displayName,
-        description: c.desc ?? '',
-        backendId: c.id,
-        icon: CategoryIconMap[key] ?? Sparkles,
-      };
+      const name = c.displayName ?? c.name ?? '—';
+      const description = c.desc ?? c.description ?? '';
+      const backendId = c.id ?? c.Id;
+      return { key, name, description, backendId, icon: CategoryIconMap[key] ?? Sparkles } as UICategory;
     });
   }, [categoryList]);
 
-  // 以 key 找 UI style/category（方便顯示名稱/點數）
-  const currentUIStyle = useMemo(() => uiStyles.find(s => s.key === selectedStyle) ?? uiStyles[0], [uiStyles, selectedStyle]);
-  const currentUICategory = useMemo(() => uiCats.find(c => c.key === selectedCategory) ?? uiCats[0], [uiCats, selectedCategory]);
+  // 以 key 找 UI style/category（顯示名稱/點數/ID）
+  const currentUIStyle = useMemo(
+    () => uiStyles.find((s) => s.key === selectedStyle) ?? uiStyles[0],
+    [uiStyles, selectedStyle]
+  );
+  const currentUICategory = useMemo(
+    () => uiCats.find((c) => c.key === selectedCategory) ?? uiCats[0],
+    [uiCats, selectedCategory]
+  );
 
   // 載入後端 meta
   useEffect(() => {
@@ -139,8 +155,8 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
       try {
         setMetaLoading(true);
         const [stylesRes, catsRes] = await Promise.all([
-          getStyleList({ page: 1, pageSize: 0 }),
-          getCategoryList({ page: 1, pageSize: 0 }),
+          getStyleList(),
+          getCategoryList(),
         ]);
         if (!alive) return;
         setStyleList(stylesRes?.dataList ?? []);
@@ -149,28 +165,29 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
       } catch (e: any) {
         if (!alive) return;
         setMetaError(e?.message ?? '載入樣式/類別失敗（已使用離線預設）');
-        // 若需要：也可在此塞預設 styleList/categoryList 作 fallback
       } finally {
         if (alive) setMetaLoading(false);
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  // 後端資料就緒後，初始化預設選擇
+  // 後端資料就緒後，初始化預設選擇（若未選）
   useEffect(() => {
-    if (uiStyles.length && !selectedStyle) {
-      setSelectedStyle(uiStyles[0].key);
-    }
-    if (uiCats.length && !selectedCategory) {
-      setSelectedCategory(uiCats[0].key);
-    }
-  }, [uiStyles, uiCats]); // eslint-disable-line
+    if (uiStyles.length && !selectedStyle) setSelectedStyle(uiStyles[0].key);
+    if (uiCats.length && !selectedCategory) setSelectedCategory(uiCats[0].key);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uiStyles, uiCats]);
+
+  const metaReady = !metaLoading && uiStyles.length > 0 && uiCats.length > 0;
 
   const nextStep = async () => {
     switch (currentStep) {
       case 'style': {
-        const pointsNeed = currentUIStyle?.points ?? 0;
+        if (!currentUIStyle) return;
+        const pointsNeed = currentUIStyle.points ?? 0;
         if (pointsNeed > userPoints) {
           onNavigate('task-center'); // 去任務中心賺點數
           return;
@@ -196,7 +213,6 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
       }
 
       case 'confirm': {
-        // 從 UI 選擇找到 backendId
         const styleBackendId = currentUIStyle?.backendId;
         const categoryBackendId = currentUICategory?.backendId;
         if (!styleBackendId || !categoryBackendId) {
@@ -282,7 +298,7 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
     }
   };
 
-  /** ------------------ 動畫頁 ------------------ **/
+  /* ------------------ 動畫頁 ------------------ */
   if (currentStep === 'animation') {
     return (
       <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
@@ -331,8 +347,12 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
               {Array.from({ length: 5 }).map((_, i) => {
                 const s = uiStyles[i % (uiStyles.length || 1)]?.key ?? 'turtle';
                 const positions = [
-                  { x: -160, y: 10 }, { x: -80, y: -20 }, { x: 0, y: 0 }, { x: 80, y: -20 }, { x: 160, y: 10 },
-                ];
+                  { x: -160, y: 10 },
+                  { x: -80, y: -20 },
+                  { x: 0, y: 0 },
+                  { x: 80, y: -20 },
+                  { x: 160, y: 10 },
+                ] as const;
                 const position = positions[i];
                 return (
                   <motion.div
@@ -379,7 +399,7 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
     );
   }
 
-  /** ------------------ 共同 UI：頂部進度 + 載入提示 ------------------ **/
+  /* ------------------ 共同 UI：頂部進度 + 載入提示 ------------------ */
   const metaBanner = (currentStep === 'style' || currentStep === 'category') && (
     <>
       {metaLoading && <p className="text-sm text-muted-foreground mt-3">載入樣式/類別中...</p>}
@@ -387,7 +407,7 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
     </>
   );
 
-  /** ------------------ 主畫面 ------------------ **/
+  /* ------------------ 主畫面 ------------------ */
   return (
     <div className="min-h-screen flex flex-col">
       {/* Fixed Header */}
@@ -453,9 +473,7 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
                 <div className="flex-1 overflow-y-auto px-4 -mx-4">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-5xl mx-auto pb-6 pt-8">
                     {(uiStyles.length ? uiStyles : [
-                      // fallback 極簡預設（若 API 壞掉）
-                      { key: 'turtle', name: '小烏龜', description: '穩重守護', points: 0, backendId: -1 },
-
+                      { key: 'turtle' as LanternStyleKey, name: '小烏龜', description: '穩重守護', points: 0, backendId: -1 },
                     ]).map((style) => (
                       <Card
                         key={style.key}
@@ -490,7 +508,7 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
                 </div>
 
                 <div className="text-center pt-6 flex-shrink-0">
-                  <Button onClick={nextStep} size="lg" className="px-8" disabled={metaLoading}>
+                  <Button onClick={nextStep} size="lg" className="px-8" disabled={!metaReady}>
                     <ArrowRight className="w-4 h-4 mr-2" />
                     下一步
                   </Button>
@@ -511,9 +529,9 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
 
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
                   {(uiCats.length ? uiCats : [
-                    { key: 'wish', name: '許願', description: '把心願寫下', icon: Sparkles, backendId: -1 },
-                    { key: 'talk', name: '傾訴', description: '說說心事', icon: MessageCircle, backendId: -2 },
-                    { key: 'thanks', name: '感謝', description: '道一聲謝謝', icon: Gift, backendId: -3 },
+                    { key: 'wish' as WishCategory, name: '許願', description: '把心願寫下', icon: Sparkles, backendId: -1 },
+                    { key: 'talk' as WishCategory, name: '傾訴', description: '說說心事', icon: MessageCircle, backendId: -2 },
+                    { key: 'thanks' as WishCategory, name: '感謝', description: '道一聲謝謝', icon: Gift, backendId: -3 },
                   ]).map((category) => {
                     const Icon = category.icon;
                     return (
@@ -534,7 +552,7 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
                   })}
                 </div>
 
-                <Button onClick={nextStep} size="lg" className="px-8" disabled={metaLoading}>
+                <Button onClick={nextStep} size="lg" className="px-8" disabled={!metaReady}>
                   <ArrowRight className="w-4 h-4 mr-2" />
                   下一步
                 </Button>
@@ -639,7 +657,7 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
                     onClick={nextStep}
                     size="lg"
                     className="px-8 bg-gradient-to-r from-[#ff8a65] to-[#ffb74d] hover:from-[#ff7043] hover:to-[#ff9800]"
-                    disabled={submitting || metaLoading}
+                    disabled={submitting || metaLoading || !currentUIStyle || !currentUICategory}
                   >
                     <Send className="w-4 h-4 mr-2" />
                     {submitting ? '送出中...' : '點燈放飛'}
@@ -650,7 +668,12 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
 
             {/* Step 5: Complete */}
             {currentStep === 'complete' && (
-              <motion.div key="complete" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center flex-1 flex flex-col justify-center">
+              <motion.div
+                key="complete"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="text-center flex-1 flex flex-col justify-center"
+              >
                 <div className="mb-8">
                   <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-r from-[#ff8a65] to-[#ffb74d] rounded-full flex items-center justify-center">
                     <Sparkles className="w-12 h-12 text-white" />
