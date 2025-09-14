@@ -10,7 +10,7 @@ import { AVAILABLE_STYLE_KEYS } from './lantern/constants';
 
 interface UserLantern {
   id: string;
-  style: string; // 使用者本地資料，字串即可，渲染時會轉為 LanternStyleKey
+  style: string; // 使用者本地資料
   category: string;
   content: string;
   timestamp: number;
@@ -29,9 +29,9 @@ interface FloatingLantern {
   x: number;
   y: number;
   style: LanternStyleKey;
-  category: string;      // 顯示用（可中文）
+  category: string;   // 顯示用（可中文）
   wish: string;
-  speed: number;         // 上升速度
+  speed: number;      // 上升速度
   categoryType: CategoryKey;
 }
 
@@ -48,10 +48,36 @@ const sampleWishes: Array<{ category: string; wish: string; type: CategoryKey }>
 const normalize = (s?: string) => (s ?? '').toLowerCase().trim();
 const validStyleIds = [...AVAILABLE_STYLE_KEYS] as LanternStyleKey[];
 
+/* ✅ 左右保留邊界（可自行調整） */
+const SAFE_MARGIN_X = 5;   // 左右各 5%
+const XMIN = SAFE_MARGIN_X;
+const XMAX = 100 - SAFE_MARGIN_X;
+
+const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+const randIn = (min: number, max: number) => min + Math.random() * (max - min);
+
+/* ✅ 初始鋪滿的最小間距（彼此避開 ±10%） */
+const INIT_X_GAP = 10;   // 你原本誤寫成 100，我幫你修正回 10
+const INIT_Y_GAP = 10;
+
+/* ✅ 本頁同時顯示上限（包含使用者天燈） */
+const MAX_ACTIVE = 20;
+
+/** 初始鋪滿用：挑一個與已存在清單保持 X/Y 都大於最小間距的位置 */
+const getInitialPosition = (existing: Array<{ x: number; y: number }>) => {
+  for (let tries = 0; tries < 80; tries++) {
+    const x = randIn(XMIN, XMAX);
+    const y = Math.random() * 100; // 初始直接鋪在畫面 0~100%
+    const ok = existing.every(p => Math.abs(p.x - x) > INIT_X_GAP && Math.abs(p.y - y) > INIT_Y_GAP);
+    if (ok) return { x, y };
+  }
+  // fallback：如果一直找不到，就給一個安全區的隨機點
+  return { x: randIn(XMIN, XMAX), y: Math.random() * 100 };
+};
+
 const toCategoryKey = (raw?: string): CategoryKey => {
   const code = normalize(raw);
   if (code === 'wish' || code === 'talk' || code === 'thanks' || code === 'vent' || code === 'other') return code;
-
   // 常見中文映射
   if (code.includes('願')) return 'wish';
   if (code.includes('訴') || code.includes('說')) return 'talk';
@@ -75,7 +101,7 @@ const toFloatingFromApi = (item: LanternDTO, i: number): FloatingLantern => {
 
   return {
     id: `lantern-${id}-${i}`,
-    x: Math.random() * 100,
+    x: randIn(XMIN, XMAX),         // 初始值會在鋪滿時被覆蓋；保險仍放安全區
     y: Math.random() * 100,
     style,
     category: catDisplay,
@@ -92,15 +118,8 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
 
   const getLanternGlowColor = (style: string) => {
     const glowColors: Record<string, string> = {
-      turtle: '#4ade80',    // 綠
-      tiger: '#f97316',     // 橘
-      bird: '#06b6d4',      // 青
-      sunflower: '#eab308', // 黃
-      otter: '#8b5cf6',     // 紫
-      cat: '#ec4899',       // 粉
-      hedgehog: '#ef4444',  // 紅
-      rabbit: '#f59e0b',    // 琥珀
-      elephant: '#6366f1',  // 靛藍
+      turtle: '#4ade80', tiger: '#f97316', bird: '#06b6d4', sunflower: '#eab308',
+      otter: '#8b5cf6', cat: '#ec4899', hedgehog: '#ef4444', rabbit: '#f59e0b', elephant: '#6366f1',
     };
     return glowColors[style] || '#ff8a65';
   };
@@ -115,7 +134,7 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
     }
   };
 
-  /* ✅ 1) 先載入 API；失敗或為空 → fallback */
+  /* 1) 載入 API；失敗或為空 → fallback（初始鋪滿時彼此避開 ±10%） */
   useEffect(() => {
     let alive = true;
 
@@ -123,43 +142,56 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
       try {
         const res = await getLanternList({ page: 1, pageSize: 0 });
         const list: LanternDTO[] = res?.dataList ?? [];
-        const mapped = list.slice(0, 40).map(toFloatingFromApi);
+        const mapped = list.map(toFloatingFromApi);   // 先轉型
         if (!alive) return;
 
-        if (mapped.length) setLanterns(mapped);
-        else {
-          const fallback = Array.from({ length: 14 }, (_, i) => {
+        const firstPlaced: FloatingLantern[] = [];
+        // 只擺到最多 MAX_ACTIVE（避免一開始就超過上限）
+        mapped.slice(0, MAX_ACTIVE).forEach((l) => {
+          const pos = getInitialPosition(firstPlaced);
+          firstPlaced.push({ ...l, x: pos.x, y: pos.y });
+        });
+
+        if (firstPlaced.length) {
+          setLanterns(firstPlaced);
+        } else {
+          // fallback
+          const fallback: FloatingLantern[] = [];
+          for (let i = 0; i < Math.min(14, MAX_ACTIVE); i++) {
             const w = sampleWishes[Math.floor(Math.random() * sampleWishes.length)];
             const style = validStyleIds[Math.floor(Math.random() * validStyleIds.length)];
-            return {
+            const pos = getInitialPosition(fallback);
+            fallback.push({
               id: `fallback-${i}`,
-              x: Math.random() * 100,
-              y: Math.random() * 100,
+              x: pos.x,
+              y: pos.y,
               style,
               category: w.category,
               wish: w.wish,
               speed: 0.1 + Math.random() * 0.2,
               categoryType: w.type,
-            } as FloatingLantern;
-          });
+            });
+          }
           setLanterns(fallback);
         }
       } catch {
         if (!alive) return;
-        const fallback = Array.from({ length: 14 }, (_, i) => {
+        const fallback: FloatingLantern[] = [];
+        for (let i = 0; i < Math.min(14, MAX_ACTIVE); i++) {
           const w = sampleWishes[Math.floor(Math.random() * sampleWishes.length)];
           const style = validStyleIds[Math.floor(Math.random() * validStyleIds.length)];
-          return {
+          const pos = getInitialPosition(fallback);
+          fallback.push({
             id: `fallback-${i}`,
-            x: Math.random() * 100,
-            y: Math.random() * 100,
+            x: pos.x,
+            y: pos.y,
             style,
             category: w.category,
             wish: w.wish,
             speed: 0.1 + Math.random() * 0.2,
             categoryType: w.type,
-          } as FloatingLantern;
-        });
+          });
+        }
         setLanterns(fallback);
       }
     })();
@@ -167,30 +199,35 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
     return () => { alive = false; };
   }, []);
 
-  /* ✅ 2) 帶入使用者的特別天燈（保持你原本來源） */
+  /* 2) 使用者的特別天燈：把初始 x 也 clamp 到安全區 */
   useEffect(() => {
     setAnimatingUserLanterns(
       (userLanterns ?? []).map((l) => ({
         ...l,
-        position: { ...l.position, y: l.position.y },
+        position: {
+          x: clamp(l.position.x, XMIN, XMAX),
+          y: l.position.y,
+        },
       }))
     );
   }, [userLanterns]);
 
-  /* ✅ 3) 動畫輪詢（記得清理） */
+  /* 3) 動畫輪詢（循環 + 限制安全區） */
   useEffect(() => {
     const timer = setInterval(() => {
-      // 一般天燈
+      // API / fallback 的天燈（數量不變，只做位移與重生）
       setLanterns((prev) =>
         prev.map((l) => {
           const ny = l.y - l.speed;
-          if (ny >= -10) return { ...l, y: ny };
-          // 重生：保留原有文案；若沒有才用 fallback 文案補齊
+          if (ny >= -10) {
+            return { ...l, y: ny, x: clamp(l.x, XMIN, XMAX) };
+          }
+          // 從底部重生（維持同一顆，數量不增加）
           const w = sampleWishes[Math.floor(Math.random() * sampleWishes.length)];
           return {
             ...l,
             y: 110,
-            x: Math.random() * 100,
+            x: randIn(XMIN, XMAX),
             wish: l.wish?.trim() ? l.wish : w.wish,
             category: l.category?.trim() ? l.category : w.category,
             categoryType: l.categoryType ?? w.type,
@@ -198,23 +235,31 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
         })
       );
 
-      // 特別天燈（使用者）
+      // 使用者天燈（獨立於 API 天燈；渲染時一起限制總數）
       setAnimatingUserLanterns((prev) =>
         prev.map((u) => {
           const newY = u.position.y - 0.12;
           if (newY < -25) {
             return {
               ...u,
-              position: { y: 110 + Math.random() * 20, x: Math.random() * 80 + 10 },
+              position: { y: 110 + Math.random() * 20, x: randIn(XMIN, XMAX) },
             };
           }
-          return { ...u, position: { ...u.position, y: newY } };
+          return {
+            ...u,
+            position: { x: clamp(u.position.x, XMIN, XMAX), y: newY },
+          };
         })
       );
     }, 100);
 
     return () => clearInterval(timer);
   }, []);
+
+  /* ---- 渲染時做總量上限：使用者優先，剩餘名額給 API/fallback ---- */
+  const visibleUserLanterns = animatingUserLanterns.filter((u) => u.position.y > -20);
+  const apiSlots = Math.max(0, MAX_ACTIVE - visibleUserLanterns.length);
+  const visibleLanterns = lanterns.slice(0, apiSlots);
 
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden">
@@ -232,14 +277,14 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
         </div>
       </div>
 
-      {/* Floating Lanterns (API 優先 / fallback 次之) */}
+      {/* Floating Lanterns (API 優先 / fallback 次之；受 MAX_ACTIVE 限制) */}
       <div className="absolute inset-0 overflow-hidden">
-        {lanterns.map((lantern) => {
+        {visibleLanterns.map((lantern) => {
           const Icon = CategoryIcon(lantern.categoryType);
           return (
             <motion.div
               key={lantern.id}
-              className="absolute cursor-pointer"
+              className="absolute cursor-pointer -translate-x-1/2"
               style={{ left: `${lantern.x}%`, top: `${lantern.y}%` }}
               animate={{ y: [0, -10, 0], rotate: [0, 2, -2, 0] }}
               transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
@@ -272,97 +317,50 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
           );
         })}
 
-        {/* 使用者的特別天燈 */}
-        {animatingUserLanterns
-          .filter((u) => u.position.y > -20)
-          .map((userLantern) => {
-            const glowColor = getLanternGlowColor(userLantern.style);
-            return (
-              <motion.div
-                key={userLantern.id}
-                className="absolute cursor-pointer"
-                style={{ left: `${userLantern.position.x}%`, top: `${userLantern.position.y}%` }}
-                animate={{ y: [0, -8, 0], rotate: [0, 3, -3, 0], scale: [1, 1.02, 1] }}
-                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-                whileHover={{ scale: 1.15 }}
-                onMouseEnter={() => setHoveredLantern(userLantern.id)}
-                onMouseLeave={() => setHoveredLantern(null)}
-              >
-                <div className="relative">
-                  {/* Glow */}
-                  <motion.div
-                    className="absolute inset-0 rounded-full blur-lg"
-                    style={{ background: `radial-gradient(circle, ${glowColor}50 0%, transparent 70%)` }}
-                    animate={{ scale: [1, 1.5, 1], opacity: [0.7, 1, 0.7] }}
-                    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                  />
-                  <motion.div
-                    className="absolute -inset-4 rounded-full blur-md"
-                    style={{ background: `radial-gradient(circle, ${glowColor}35 0%, transparent 60%)` }}
-                    animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0.8, 0.5] }}
-                    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
-                  />
-                  <motion.div
-                    className="absolute inset-0 rounded-full blur-sm opacity-30"
-                    style={{ background: `linear-gradient(to top, ${glowColor}60 0%, transparent 100%)`, height: '150%', top: '0%' }}
-                    animate={{ opacity: [0.2, 0.5, 0.2] }}
-                    transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-                  />
+        {/* 使用者的特別天燈（優先佔位；若超過 MAX_ACTIVE，這裡也會被截斷） */}
+        {visibleUserLanterns.slice(0, MAX_ACTIVE).map((userLantern) => {
+          const glowColor = getLanternGlowColor(userLantern.style);
+          return (
+            <motion.div
+              key={userLantern.id}
+              className="absolute cursor-pointer -translate-x-1/2"
+              style={{ left: `${userLantern.position.x}%`, top: `${userLantern.position.y}%` }}
+              animate={{ y: [0, -8, 0], rotate: [0, 3, -3, 0], scale: [1, 1.02, 1] }}
+              transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+              whileHover={{ scale: 1.15 }}
+            >
+              <div className="relative">
+                {/* Glow */}
+                <motion.div
+                  className="absolute inset-0 rounded-full blur-lg"
+                  style={{ background: `radial-gradient(circle, ${glowColor}50 0%, transparent 70%)` }}
+                  animate={{ scale: [1, 1.5, 1], opacity: [0.7, 1, 0.7] }}
+                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                />
+                <motion.div
+                  className="absolute -inset-4 rounded-full blur-md"
+                  style={{ background: `radial-gradient(circle, ${glowColor}35 0%, transparent 60%)` }}
+                  animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0.8, 0.5] }}
+                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
+                />
+                <motion.div
+                  className="absolute inset-0 rounded-full blur-sm opacity-30"
+                  style={{ background: `linear-gradient(to top, ${glowColor}60 0%, transparent 100%)`, height: '150%', top: '0%' }}
+                  animate={{ opacity: [0.2, 0.5, 0.2] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                />
 
-                  {/* Lantern */}
-                  <div
-                    className={`w-20 h-25 relative transition-all duration-300 ${
-                      hoveredLantern === userLantern.id ? 'scale-110' : 'scale-100'
-                    } z-10`}
-                  >
-                    <LanternRenderer
-                      style={chooseSafeStyle(userLantern.style)}
-                      className="w-full h-full opacity-95"
-                    />
-
-                    {hoveredLantern === userLantern.id && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="absolute -top-28 left-1/2 -translate-x-1/2 bg-card/95 backdrop-blur-sm border-2 rounded-lg p-4 w-64 sm:w-72 md:w-80 text-sm text-center shadow-xl z-50"
-                        style={{ borderColor: `${glowColor}60`, boxShadow: `0 0 25px ${glowColor}40, 0 0 50px ${glowColor}20` }}
-                      >
-                        <div className="flex items-center justify-center gap-2 mb-2">
-                          <motion.div className="w-2 h-2 rounded-full" style={{ backgroundColor: glowColor }}
-                            animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 1.5, repeat: Infinity }} />
-                          <p className="text-accent font-medium text-base">我的願望</p>
-                          <motion.div className="w-2 h-2 rounded-full" style={{ backgroundColor: glowColor }}
-                            animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 1.5, repeat: Infinity, delay: 0.5 }} />
-                        </div>
-                        <p className="text-foreground leading-relaxed font-medium">{userLantern.content}</p>
-                        <p className="text-xs text-muted-foreground mt-2">
-                          {new Date(userLantern.timestamp).toLocaleDateString('zh-TW')}
-                        </p>
-                        <div
-                          className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-card rotate-45"
-                          style={{ borderRight: `1px solid ${glowColor}60`, borderBottom: `1px solid ${glowColor}60` }}
-                        />
-                      </motion.div>
-                    )}
-                  </div>
-
-                  {/* 小星火 */}
-                  <motion.div className="absolute inset-0 pointer-events-none" animate={{ rotate: [0, 360] }}
-                    transition={{ duration: 25, repeat: Infinity, ease: 'linear' }}>
-                    {Array.from({ length: 4 }).map((_, i) => (
-                      <motion.div
-                        key={i}
-                        className="absolute w-1 h-1 rounded-full"
-                        style={{ backgroundColor: getLanternGlowColor(userLantern.style), left: `${20 + i * 20}%`, top: `${20 + i * 20}%` }}
-                        animate={{ opacity: [0, 1, 0], scale: [0.3, 1.8, 0.3] }}
-                        transition={{ duration: 2.5, repeat: Infinity, delay: i * 0.6 }}
-                      />
-                    ))}
-                  </motion.div>
+                {/* Lantern */}
+                <div className="w-20 h-25 relative transition-all duration-300 z-10">
+                  <LanternRenderer
+                    style={chooseSafeStyle(userLantern.style)}
+                    className="w-full h-full opacity-95"
+                  />
                 </div>
-              </motion.div>
-            );
-          })}
+              </div>
+            </motion.div>
+          );
+        })}
       </div>
 
       {/* Bottom */}
