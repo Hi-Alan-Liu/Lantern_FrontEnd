@@ -28,37 +28,37 @@ export function LandingPage({ onNavigate, userPoints }: LandingPageProps) {
 
       {/* Feature Cards */}
       <div className="grid md:grid-cols-3 gap-6 mb-12 max-w-4xl mx-auto w-full">
-        <Card className="p-6 bg-card/50 backdrop-blur-sm border-border/50 hover:border-accent/50 transition-all duration-300 lantern-glow">
+        <Card className="p-6 bg-card/60 border border-border/30 cursor-default select-text lantern-glow">
           <div className="text-center">
             <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-accent/20 flex items-center justify-center">
               <Heart className="w-6 h-6 text-accent" />
             </div>
-            <h3 className="mb-2">匿名許願</h3>
-            <p className="text-muted-foreground text-sm">
+            <h3 className="text-lg font-medium mb-2">匿名許願</h3>
+            <p className="text-muted-foreground text-sm leading-relaxed">
               無需註冊，匿名寫下心中所想，讓願望自由飛翔
             </p>
           </div>
         </Card>
 
-        <Card className="p-6 bg-card/50 backdrop-blur-sm border-border/50 hover:border-accent/50 transition-all duration-300 lantern-glow">
+        <Card className="p-6 bg-card/60 border border-border/30 cursor-default select-text lantern-glow">
           <div className="text-center">
             <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-primary/20 flex items-center justify-center">
               <Sparkles className="w-6 h-6 text-primary" />
             </div>
-            <h3 className="mb-2">療癒儀式</h3>
-            <p className="text-muted-foreground text-sm">
+            <h3 className="text-lg font-medium mb-2">療癒儀式</h3>
+            <p className="text-muted-foreground text-sm leading-relaxed">
               透過溫柔的點燈儀式，釋放情緒，獲得內心平靜
             </p>
           </div>
         </Card>
 
-        <Card className="p-6 bg-card/50 backdrop-blur-sm border-border/50 hover:border-accent/50 transition-all duration-300 lantern-glow">
+        <Card className="p-6 bg-card/60 border border-border/30 cursor-default select-text lantern-glow">
           <div className="text-center">
             <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-secondary/20 flex items-center justify-center">
               <Star className="w-6 h-6 text-[#8b5cf6]" />
             </div>
-            <h3 className="mb-2">星空共鳴</h3>
-            <p className="text-muted-foreground text-sm">
+            <h3 className="text-lg font-medium mb-2">星空共鳴</h3>
+            <p className="text-muted-foreground text-sm leading-relaxed">
               觀看滿天飛舞的天燈，感受來自世界的溫暖能量
             </p>
           </div>
@@ -105,7 +105,7 @@ export function LandingPage({ onNavigate, userPoints }: LandingPageProps) {
       </div>
 
       {/* Footer */}
-      <div className="mt-16 text-center max-w-lg mx-auto">
+      <div className="mt-4 text-center max-w-lg mx-auto">
         <p className="text-sm text-muted-foreground leading-relaxed">
           天燈 Go 致力於提供一個正向、健康的創意表達空間
           <br />

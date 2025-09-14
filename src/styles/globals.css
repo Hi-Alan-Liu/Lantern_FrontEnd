@@ -268,7 +268,7 @@ html {
 }
 
 .lantern-glow {
-  animation: glow 2s ease-in-out infinite;
+  animation: glow 20s ease-in-out infinite;
 }
 
 .star-twinkle {
