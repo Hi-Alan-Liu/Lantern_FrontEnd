@@ -8,6 +8,10 @@ import { getLanternList } from './lantern/lanternService';
 import type { LanternDTO, LanternStyleKey, WishCategory } from './lantern/lantern';
 import { AVAILABLE_STYLE_KEYS } from './lantern/constants';
 
+const ANTI_DRUG_TAGLINES = ['青春無毒', '拒毒守心', '遠離毒害'] as const;
+const pickRandomTagline = () =>
+  ANTI_DRUG_TAGLINES[Math.floor(Math.random() * ANTI_DRUG_TAGLINES.length)];
+
 interface UserLantern {
   id: string;
   style: string; // 使用者本地資料
@@ -33,6 +37,7 @@ interface FloatingLantern {
   wish: string;
   speed: number;      // 上升速度
   categoryType: CategoryKey;
+  tagline: string;
 }
 
 /* ---------- Fallback（API 無資料/失敗時才用） ---------- */
@@ -108,6 +113,7 @@ const toFloatingFromApi = (item: LanternDTO, i: number): FloatingLantern => {
     wish: text,
     speed: 0.1 + Math.random() * 0.2,
     categoryType: catKey,
+    tagline: pickRandomTagline(),
   };
 };
 
@@ -170,6 +176,7 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
               wish: w.wish,
               speed: 0.1 + Math.random() * 0.2,
               categoryType: w.type,
+              tagline: pickRandomTagline(), 
             });
           }
           setLanterns(fallback);
@@ -190,6 +197,7 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
             wish: w.wish,
             speed: 0.1 + Math.random() * 0.2,
             categoryType: w.type,
+            tagline: pickRandomTagline(), 
           });
         }
         setLanterns(fallback);
@@ -231,6 +239,7 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
             wish: l.wish?.trim() ? l.wish : w.wish,
             category: l.category?.trim() ? l.category : w.category,
             categoryType: l.categoryType ?? w.type,
+            tagline: l.tagline ?? pickRandomTagline(),
           };
         })
       );
@@ -311,6 +320,14 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
                       <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-card border-r border-b border-border/50 rotate-45" />
                     </motion.div>
                   )}
+                  <div
+                    className="absolute left-1/2 top-full -translate-x-1/2 mt-1.5
+                              px-1.5 py-[2px] rounded-xs border border-border/30
+                              bg-card/80 backdrop-blur-sm shadow
+                              text-xs leading-[1.1] text-white/85 text-center w-max"
+                  >
+                    {lantern.tagline}
+                  </div>
                 </div>
               </div>
             </motion.div>
