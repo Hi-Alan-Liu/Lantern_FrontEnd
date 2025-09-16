@@ -311,9 +311,12 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
           >
             <div className="w-32 h-40 mx-auto relative">
               <motion.div
-                className="absolute inset-0 rounded-full blur-lg"
-                style={{ background: `radial-gradient(circle, #ff8a65 0%, #ffb74d 50%, transparent 100%)` }}
-                animate={{ scale: [1, 1.5, 1], opacity: [0.6, 0.9, 0.6] }}
+                className="absolute inset-0 rounded-full blur-lg pointer-events-none mix-blend-screen"
+                style={{
+                  background: 'radial-gradient(circle, #ffffffb3 0%, transparent 70%)', // 白色核心光
+                  boxShadow: '0 0 24px #ffffff80'                                       // 稍微加深
+                }}
+                animate={{ scale: [1.3, 2, 1.3] }}
                 transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
               />
               <motion.div

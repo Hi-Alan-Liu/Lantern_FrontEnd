@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from './ui/button';
 import { Sparkles, MessageCircle, Gift, Frown, MoreHorizontal } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -8,6 +8,7 @@ import { getLanternList } from './lantern/lanternService';
 import type { LanternDTO, LanternStyleKey, WishCategory } from './lantern/lantern';
 import { AVAILABLE_STYLE_KEYS } from './lantern/constants';
 
+/* ---------- 反毒標語（用於隨機 tagline） ---------- */
 const ANTI_DRUG_TAGLINES = [
   '要健康 不吸毒',
   '愛與陪伴 全民防毒',
@@ -24,23 +25,18 @@ const ANTI_DRUG_TAGLINES = [
   '用愛牽起手，反毒不失守',
   '反毒好樣，健康好YOUNG！',
   '反毒雄讚',
-  '青春要舞台，毒品不要來',
   '青春不毒白',
   '拒絕「毒」、「賭」一生',
   '吸毒人生塗塗塗！',
-  '堅定說不，毒品讓步',
-  '毒品無底洞，終身不能碰',
-  '染毒一生，孤獨一生',
-  '拒絕毒品，你我做起',
-  '邪惡毒品愛KO',
 ] as const;
 
 const pickRandomTagline = () =>
   ANTI_DRUG_TAGLINES[Math.floor(Math.random() * ANTI_DRUG_TAGLINES.length)];
 
+/* ---------- 型別 ---------- */
 interface UserLantern {
   id: string;
-  style: string; // 使用者本地資料
+  style: string; // 入口仍允許 string，渲染前用 chooseSafeStyle 收斂
   category: string;
   content: string;
   timestamp: number;
@@ -56,17 +52,17 @@ type CategoryKey = WishCategory;
 
 interface FloatingLantern {
   id: string;
-  x: number;
-  y: number;
+  x: number;          // 百分比座標（0~100）
+  y: number;          // 百分比座標（0~100）
   style: LanternStyleKey;
-  category: string;   // 顯示用（可中文）
+  category: string;   // 顯示用（中文）
   wish: string;
   speed: number;      // 上升速度
   categoryType: CategoryKey;
   tagline: string;
 }
 
-/* ---------- Fallback（API 無資料/失敗時才用） ---------- */
+/* ---------- 初始 fallback 資料 ---------- */
 const sampleWishes: Array<{ category: string; wish: string; type: CategoryKey }> = [
   { category: '許願',   wish: '希望家人身體健康平安', type: 'wish' },
   { category: '感謝',   wish: '謝謝你一直陪伴在我身邊', type: 'thanks' },
@@ -79,52 +75,38 @@ const sampleWishes: Array<{ category: string; wish: string; type: CategoryKey }>
 const normalize = (s?: string) => (s ?? '').toLowerCase().trim();
 const validStyleIds = [...AVAILABLE_STYLE_KEYS] as LanternStyleKey[];
 
-/* ✅ 左右保留邊界（可自行調整） */
-const SAFE_MARGIN_X = 5;   // 左右各 5%
+/* 安全區（左右各 5%） */
+const SAFE_MARGIN_X = 5;
 const XMIN = SAFE_MARGIN_X;
 const XMAX = 100 - SAFE_MARGIN_X;
 
+/* 位置與碰撞輔助 */
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 const randIn = (min: number, max: number) => min + Math.random() * (max - min);
-
-/* ✅ 初始鋪滿的最小間距（彼此避開 ±10%） */
-const INIT_X_GAP = 10;   // 你原本誤寫成 100，我幫你修正回 10
+const INIT_X_GAP = 10;
 const INIT_Y_GAP = 10;
+const MAX_ACTIVE = 9; // 畫面同時顯示上限
+const MIN_DIST = Math.max(INIT_X_GAP, INIT_Y_GAP);
 
-/* ✅ 本頁同時顯示上限（包含使用者天燈） */
-const MAX_ACTIVE = 9;
-
-const MIN_DIST = Math.max(INIT_X_GAP, INIT_Y_GAP); // 以你現有常數為下限
-
-const dist = (a: {x:number;y:number}, b: {x:number;y:number}) => {
-  const dx = a.x - b.x;
-  const dy = a.y - b.y;
-  return Math.hypot(dx, dy);
-};
+const dist = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+  Math.hypot(a.x - b.x, a.y - b.y);
 
 const getInitialPosition = (existing: Array<{ x: number; y: number }>) => {
-  let best: {x:number;y:number} | null = null;
+  let best: { x: number; y: number } | null = null;
   let bestMinD = -1;
-
-  // 多嘗試幾次，並記錄「最遠候選」
   for (let tries = 0; tries < 120; tries++) {
     const candidate = { x: randIn(XMIN, XMAX), y: Math.random() * 100 };
-
-    // 沒有既有點就直接用
     if (existing.length === 0) return candidate;
 
-    const ok = existing.every(p => dist(p, candidate) > MIN_DIST);
+    const ok = existing.every((p) => dist(p, candidate) > MIN_DIST);
     if (ok) return candidate;
 
-    // 記錄此候選「離最近既有點」的距離，用來挑最遠者
     const minD = existing.reduce((m, p) => Math.min(m, dist(p, candidate)), Infinity);
     if (minD > bestMinD) {
       bestMinD = minD;
       best = candidate;
     }
   }
-
-  // 找不到完全合規位置 → 退而求其次選「目前看起來最遠」的候選
   return best ?? { x: randIn(XMIN, XMAX), y: Math.random() * 100 };
 };
 
@@ -135,15 +117,16 @@ const toCategoryKey = (raw?: string): CategoryKey => {
   if (code.includes('願')) return 'wish';
   if (code.includes('訴') || code.includes('說')) return 'talk';
   if (code.includes('謝') || code.includes('恩')) return 'thanks';
-  if (code.includes('洩') || code.includes('抱怨')) return 'vent';
+  if (code.includes('洩') || code.includes('怨') || code.includes('怒')) return 'vent';
   return 'other';
 };
 
 const chooseSafeStyle = (raw?: string): LanternStyleKey => {
   const s = normalize(raw) as LanternStyleKey;
-  return (validStyleIds as string[]).includes(s) ? s : (validStyleIds[0] ?? 'turtle');
+  return (validStyleIds as string[]).includes(s) ? s : ('turtle' as LanternStyleKey);
 };
 
+/* 將 API DTO 轉為 FloatingLantern（含 tagline 鍵修正） */
 const toFloatingFromApi = (item: LanternDTO, i: number): FloatingLantern => {
   const any = item as any;
   const id = String(any.id ?? any.Id ?? `api-${i}`);
@@ -151,149 +134,236 @@ const toFloatingFromApi = (item: LanternDTO, i: number): FloatingLantern => {
   const text = String(any.text ?? any.content ?? any.Content ?? '');
   const catDisplay = String(any.categoryName ?? any.CategoryName ?? any.category ?? any.Category ?? '其他');
   const catKey = toCategoryKey(any.category ?? any.Category ?? any.categoryName ?? any.CategoryName);
-  const tagline = String(any.taglineText ?? any.taglineText ?? pickRandomTagline());
+  const tagline =
+    String(any.tagline ?? any.taglineText ?? any.Tagline ?? any.TaglineText ?? '') || pickRandomTagline();
 
   return {
     id: `lantern-${id}-${i}`,
-    x: randIn(XMIN, XMAX),         // 初始值會在鋪滿時被覆蓋；保險仍放安全區
+    x: randIn(XMIN, XMAX),         // 初始會被鋪滿邏輯覆蓋；保險仍放安全區
     y: Math.random() * 100,
     style,
     category: catDisplay,
     wish: text,
     speed: 0.1 + Math.random() * 0.2,
     categoryType: catKey,
-    tagline: tagline,
+    tagline,
   };
 };
 
+/* ---------- 視覺 ---------- */
+const getLanternGlowColor = (style: string) => {
+  const glowColors: Record<string, string> = {
+    turtle: '#4ade80', tiger: '#f97316', bird: '#06b6d4', sunflower: '#eab308',
+    otter: '#8b5cf6', cat: '#ec4899', hedgehog: '#ef4444', rabbit: '#f59e0b', elephant: '#6366f1',
+  };
+  return glowColors[style] || '#ff8a65';
+};
+
+const CategoryIcon = (k: CategoryKey) => {
+  switch (k) {
+    case 'wish': return Sparkles;
+    case 'talk': return MessageCircle;
+    case 'thanks': return Gift;
+    case 'vent': return Frown;
+    default: return MoreHorizontal;
+  }
+};
+
+/* ========================================================================== */
+/*                              WishWall Component                             */
+/* ========================================================================== */
 export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
-  const [lanterns, setLanterns] = useState<FloatingLantern[]>([]);
-  const [animatingUserLanterns, setAnimatingUserLanterns] = useState<UserLantern[]>([]);
+  /* ---------------- React state ---------------- */
   const [hoveredLantern, setHoveredLantern] = useState<string | null>(null);
 
-  const getLanternGlowColor = (style: string) => {
-    const glowColors: Record<string, string> = {
-      turtle: '#4ade80', tiger: '#f97316', bird: '#06b6d4', sunflower: '#eab308',
-      otter: '#8b5cf6', cat: '#ec4899', hedgehog: '#ef4444', rabbit: '#f59e0b', elephant: '#6366f1',
-    };
-    return glowColors[style] || '#ff8a65';
-  };
+  // API「活動中的 1~9 顆」
+  const [activeApiLanterns, setActiveApiLanterns] = useState<FloatingLantern[]>([]);
+  // 使用者天燈（帶動畫位置）
+  const [animatingUserLanterns, setAnimatingUserLanterns] = useState<UserLantern[]>([]);
 
-  const CategoryIcon = (k: CategoryKey) => {
-    switch (k) {
-      case 'wish': return Sparkles;
-      case 'talk': return MessageCircle;
-      case 'thanks': return Gift;
-      case 'vent': return Frown;
-      default: return MoreHorizontal;
-    }
-  };
+  /* ---------------- Pool 與索引（循環佇列） ---------------- */
+  const apiPoolRef = useRef<FloatingLantern[]>([]);  // API 回來的全量（例如 40）
+  const nextIndexRef = useRef<number>(0);            // 下一筆要補進來的 index
 
-  /* 1) 載入 API；失敗或為空 → fallback（初始鋪滿時彼此避開 ±10%） */
+  /* ---------------- 1) 載入 API；初始化資料池 + 初始 1~9 鋪滿 ---------------- */
   useEffect(() => {
     let alive = true;
-
     (async () => {
       try {
         const res = await getLanternList({ page: 1, pageSize: 0 });
         const list: LanternDTO[] = res?.dataList ?? [];
-        const mapped = list.map(toFloatingFromApi);   // 先轉型
+        const mapped = list.map(toFloatingFromApi);
+
         if (!alive) return;
 
-        const firstPlaced: FloatingLantern[] = [];
-        // 只擺到最多 MAX_ACTIVE（避免一開始就超過上限）
-        mapped.slice(0, MAX_ACTIVE).forEach((l) => {
-          const pos = getInitialPosition(firstPlaced);
-          firstPlaced.push({ ...l, x: pos.x, y: pos.y });
-        });
-
-        if (firstPlaced.length) {
-          setLanterns(firstPlaced);
+        if (mapped.length > 0) {
+          apiPoolRef.current = mapped;
+          // 初始化活動 1~MAX_ACTIVE
+          const firstPlaced: FloatingLantern[] = [];
+          mapped.slice(0, MAX_ACTIVE).forEach((l) => {
+            const pos = getInitialPosition(firstPlaced);
+            firstPlaced.push({ ...l, x: pos.x, y: pos.y });
+          });
+          setActiveApiLanterns(firstPlaced);
+          nextIndexRef.current = Math.min(mapped.length, MAX_ACTIVE); // 從第 10 筆開始
         } else {
-          // fallback
-          const fallback: FloatingLantern[] = [];
-          for (let i = 0; i < Math.min(14, MAX_ACTIVE); i++) {
+          // fallback 也走 pool + 初始
+          const fallbackPool: FloatingLantern[] = [];
+          for (let i = 0; i < Math.max(MAX_ACTIVE, 14); i++) {
             const w = sampleWishes[Math.floor(Math.random() * sampleWishes.length)];
             const style = validStyleIds[Math.floor(Math.random() * validStyleIds.length)];
-            const pos = getInitialPosition(fallback);
-            fallback.push({
-              id: `fallback-${i}`,
-              x: pos.x,
-              y: pos.y,
+            fallbackPool.push({
+              id: `fallback-pool-${i}`,
+              x: randIn(XMIN, XMAX),
+              y: Math.random() * 100,
               style,
               category: w.category,
               wish: w.wish,
               speed: 0.1 + Math.random() * 0.2,
               categoryType: w.type,
-              tagline: pickRandomTagline(), 
+              tagline: pickRandomTagline(),
             });
           }
-          setLanterns(fallback);
+          apiPoolRef.current = fallbackPool;
+
+          const firstPlaced: FloatingLantern[] = [];
+          fallbackPool.slice(0, MAX_ACTIVE).forEach((l) => {
+            const pos = getInitialPosition(firstPlaced);
+            firstPlaced.push({ ...l, x: pos.x, y: pos.y });
+          });
+          setActiveApiLanterns(firstPlaced);
+          nextIndexRef.current = Math.min(fallbackPool.length, MAX_ACTIVE);
         }
       } catch {
         if (!alive) return;
-        const fallback: FloatingLantern[] = [];
-        for (let i = 0; i < Math.min(14, MAX_ACTIVE); i++) {
+        // fallback on error（同上）
+        const fallbackPool: FloatingLantern[] = [];
+        for (let i = 0; i < Math.max(MAX_ACTIVE, 14); i++) {
           const w = sampleWishes[Math.floor(Math.random() * sampleWishes.length)];
           const style = validStyleIds[Math.floor(Math.random() * validStyleIds.length)];
-          const pos = getInitialPosition(fallback);
-          fallback.push({
-            id: `fallback-${i}`,
-            x: pos.x,
-            y: pos.y,
+          fallbackPool.push({
+            id: `fallback-pool-${i}`,
+            x: randIn(XMIN, XMAX),
+            y: Math.random() * 100,
             style,
             category: w.category,
             wish: w.wish,
             speed: 0.1 + Math.random() * 0.2,
             categoryType: w.type,
-            tagline: pickRandomTagline(), 
+            tagline: pickRandomTagline(),
           });
         }
-        setLanterns(fallback);
+        apiPoolRef.current = fallbackPool;
+
+        const firstPlaced: FloatingLantern[] = [];
+        fallbackPool.slice(0, MAX_ACTIVE).forEach((l) => {
+          const pos = getInitialPosition(firstPlaced);
+          firstPlaced.push({ ...l, x: pos.x, y: pos.y });
+        });
+        setActiveApiLanterns(firstPlaced);
+        nextIndexRef.current = Math.min(fallbackPool.length, MAX_ACTIVE);
       }
     })();
-
     return () => { alive = false; };
   }, []);
 
-  /* 2) 使用者的特別天燈：把初始 x 也 clamp 到安全區 */
+  /* ---------------- 2) 使用者天燈：進來時 clamp x 到安全區 ---------------- */
   useEffect(() => {
     setAnimatingUserLanterns(
       (userLanterns ?? []).map((l) => ({
         ...l,
-        position: {
-          x: clamp(l.position.x, XMIN, XMAX),
-          y: l.position.y,
-        },
+        position: { x: clamp(l.position.x, XMIN, XMAX), y: l.position.y },
       }))
     );
   }, [userLanterns]);
 
-  /* 3) 動畫輪詢（循環 + 限制安全區） */
+  /* ---------------- 3) 根據「使用者優先」動態調整 API slots ---------------- */
+  const visibleUserLanterns = useMemo(
+    () => animatingUserLanterns.filter((u) => u.position.y > -20),
+    [animatingUserLanterns]
+  );
+  const apiSlots = Math.max(0, MAX_ACTIVE - visibleUserLanterns.length);
+
+  // apiSlots 變化時，補或裁減 activeApiLanterns（從 pool 取「下一筆」）
+  useEffect(() => {
+    setActiveApiLanterns((prev) => {
+      const pool = apiPoolRef.current;
+      if (pool.length === 0) return prev;
+
+      if (prev.length === apiSlots) return prev;
+
+      if (prev.length > apiSlots) {
+        return prev.slice(0, apiSlots);
+      }
+
+      const need = apiSlots - prev.length;
+      const added: FloatingLantern[] = [];
+      for (let i = 0; i < need; i++) {
+        const next = pool[nextIndexRef.current % pool.length];
+        nextIndexRef.current = (nextIndexRef.current + 1) % pool.length;
+        const pos = getInitialPosition([...prev, ...added]);
+        added.push({
+          ...next,
+          x: pos.x,
+          y: 110 + Math.random() * 10,
+          speed: next.speed ?? (0.1 + Math.random() * 0.2),
+        });
+      }
+      return [...prev, ...added];
+    });
+  }, [apiSlots]);
+
+  /* ---------------- 4) setInterval 迴圈（每 100ms 更新） ---------------- */
   useEffect(() => {
     const timer = setInterval(() => {
-      // API / fallback 的天燈（數量不變，只做位移與重生）
-      setLanterns((prev) =>
-        prev.map((l) => {
-          const ny = l.y - l.speed;
-          if (ny >= -10) {
-            return { ...l, y: ny, x: clamp(l.x, XMIN, XMAX) };
-          }
-          // 從底部重生（維持同一顆，數量不增加）
-          const w = sampleWishes[Math.floor(Math.random() * sampleWishes.length)];
-          return {
-            ...l,
-            y: 110,
-            x: randIn(XMIN, XMAX),
-            wish: l.wish?.trim() ? l.wish : w.wish,
-            category: l.category?.trim() ? l.category : w.category,
-            categoryType: l.categoryType ?? w.type,
-            tagline: l.tagline ?? pickRandomTagline(),
-          };
-        })
-      );
+      // API 活動天燈：若離場，換「下一筆」補位（1→2→…→40→1）
+      setActiveApiLanterns((prev) => {
+        const pool = apiPoolRef.current;
+        if (pool.length === 0) {
+          // 沒 pool：維持原先重生邏輯
+          return prev.map((l) => {
+            const ny = l.y - l.speed;
+            if (ny >= -10) {
+              return { ...l, y: ny, x: clamp(l.x, XMIN, XMAX) };
+            }
+            const w = sampleWishes[Math.floor(Math.random() * sampleWishes.length)];
+            return {
+              ...l,
+              y: 110,
+              x: randIn(XMIN, XMAX),
+              wish: l.wish?.trim() ? l.wish : w.wish,
+              category: l.category?.trim() ? l.category : w.category,
+              categoryType: l.categoryType ?? w.type,
+              tagline: l.tagline ?? pickRandomTagline(),
+            };
+          });
+        }
 
-      // 使用者天燈（獨立於 API 天燈；渲染時一起限制總數）
+        const updated: FloatingLantern[] = [];
+        for (let i = 0; i < prev.length; i++) {
+          const l = prev[i];
+          const ny = l.y - l.speed;
+
+          if (ny >= -10) {
+            updated.push({ ...l, y: ny, x: clamp(l.x, XMIN, XMAX) });
+          } else {
+            // 離場 → 從資料池取「下一筆」補位（循環佇列）
+            const next = pool[nextIndexRef.current % pool.length];
+            nextIndexRef.current = (nextIndexRef.current + 1) % pool.length;
+
+            const pos = getInitialPosition(updated);
+            updated.push({
+              ...next,
+              x: pos.x,
+              y: 110 + Math.random() * 10,
+              speed: next.speed ?? (0.1 + Math.random() * 0.2),
+            });
+          }
+        }
+        return updated;
+      });
+
+      // 使用者天燈：自走 + 循環
       setAnimatingUserLanterns((prev) =>
         prev.map((u) => {
           const newY = u.position.y - 0.12;
@@ -303,10 +373,7 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
               position: { y: 110 + Math.random() * 20, x: randIn(XMIN, XMAX) },
             };
           }
-          return {
-            ...u,
-            position: { x: clamp(u.position.x, XMIN, XMAX), y: newY },
-          };
+          return { ...u, position: { x: clamp(u.position.x, XMIN, XMAX), y: newY } };
         })
       );
     }, 100);
@@ -314,10 +381,8 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
     return () => clearInterval(timer);
   }, []);
 
-  /* ---- 渲染時做總量上限：使用者優先，剩餘名額給 API/fallback ---- */
-  const visibleUserLanterns = animatingUserLanterns.filter((u) => u.position.y > -20);
-  const apiSlots = Math.max(0, MAX_ACTIVE - visibleUserLanterns.length);
-  const visibleLanterns = lanterns.slice(0, apiSlots);
+  /* ---------------- 5) 渲染 ---------------- */
+  const visibleLanterns = activeApiLanterns; // 已等於 apiSlots
 
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden">
@@ -335,10 +400,20 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
         </div>
       </div>
 
-      {/* Floating Lanterns (API 優先 / fallback 次之；受 MAX_ACTIVE 限制) */}
+      {/* Floating Lanterns */}
       <div className="absolute inset-0 overflow-hidden">
         {visibleLanterns.map((lantern) => {
           const Icon = CategoryIcon(lantern.categoryType);
+
+          // Tooltip 溢出保護：左右兩側時改變錨點
+          const tipSide = lantern.x < 15 ? 'left' : lantern.x > 85 ? 'right' : 'center';
+          const tipClass =
+            tipSide === 'left'
+              ? 'left-0 -translate-x-0'
+              : tipSide === 'right'
+              ? 'left-full -translate-x-full'
+              : 'left-1/2 -translate-x-1/2';
+
           return (
             <motion.div
               key={lantern.id}
@@ -356,24 +431,29 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
                   } opacity-80 hover:opacity-100`}
                 >
                   <LanternRenderer style={lantern.style} size="small" className="w-full h-full" />
+
                   {hoveredLantern === lantern.id && (
                     <motion.div
                       initial={{ opacity: 0, scale: 0.8 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      className="absolute -top-20 left-1/2 -translate-x-1/2 bg-card/95 backdrop-blur-sm border border-border/50 rounded-lg p-4 w-64 sm:w-72 md:w-80 text-sm text-center shadow-xl z-50"
+                      className={`absolute -top-20 ${tipClass} bg-card/95 backdrop-blur-sm border border-border/50 rounded-lg p-4 w-64 sm:w-72 md:w-80 text-sm text-center shadow-xl z-50`}
                     >
                       <div className="flex items-center justify-center gap-2 mb-2">
+                        <Icon className="w-4 h-4 text-accent" />
                         <p className="text-accent font-medium">{lantern.category}</p>
                       </div>
                       <p className="text-foreground leading-relaxed">{lantern.wish}</p>
                       <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-card border-r border-b border-border/50 rotate-45" />
                     </motion.div>
                   )}
+
+                  {/* Tagline badge（防誤觸） */}
                   <div
                     className="absolute left-1/2 top-full -translate-x-1/2 mt-1.5
-                              px-1.5 py-[2px] rounded-xs border border-border/30
-                              bg-card/80 backdrop-blur-sm shadow
-                              text-xs leading-[1.1] text-white/85 text-center w-max"
+                               px-1.5 py-[2px] rounded-xs border border-border/30
+                               bg-card/80 backdrop-blur-sm shadow
+                               text-xs leading-[1.1] text-white/85 text-center w-max
+                               pointer-events-none"
                   >
                     {lantern.tagline}
                   </div>
@@ -383,11 +463,13 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
           );
         })}
 
-        {/* 使用者的特別天燈 */}
+        {/* 使用者的特別天燈（優先顯示） */}
         {animatingUserLanterns
           .filter((u) => u.position.y > -20)
           .map((userLantern) => {
-            const glowColor = getLanternGlowColor(userLantern.style);
+            const safeStyle = chooseSafeStyle(userLantern.style);
+            const glowColor = getLanternGlowColor(safeStyle);
+
             return (
               <motion.div
                 key={userLantern.id}
@@ -402,10 +484,10 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
                 <div className="relative">
                   {/* Glow */}
                   <motion.div
-                    className="absolute inset-0 rounded-full blur-lg pointer-events-none mix-blend-screen"
+                    className="absolute inset-0 rounded-full blur-xl pointer-events-none mix-blend-screen"
                     style={{
-                      background: 'radial-gradient(circle, #ffffffb3 0%, transparent 70%)', // 白色核心光
-                      boxShadow: '0 0 24px #ffffff80'                                       // 稍微加深
+                      background: 'radial-gradient(circle, #ffffffb3 0%, transparent 70%)',
+                      boxShadow: '0 0 24px #ffffff80',
                     }}
                     animate={{ scale: [1.3, 2, 1.3] }}
                     transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
@@ -430,7 +512,7 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
                     } z-10`}
                   >
                     <LanternRenderer
-                      style={chooseSafeStyle(userLantern.style)}
+                      style={safeStyle}
                       className="w-full h-full opacity-95"
                     />
 
@@ -467,7 +549,7 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
                       <motion.div
                         key={i}
                         className="absolute w-1 h-1 rounded-full"
-                        style={{ backgroundColor: getLanternGlowColor(userLantern.style), left: `${20 + i * 20}%`, top: `${20 + i * 20}%` }}
+                        style={{ backgroundColor: glowColor, left: `${20 + i * 20}%`, top: `${20 + i * 20}%` }}
                         animate={{ opacity: [0, 1, 0], scale: [0.3, 1.8, 0.3] }}
                         transition={{ duration: 2.5, repeat: Infinity, delay: i * 0.6 }}
                       />
