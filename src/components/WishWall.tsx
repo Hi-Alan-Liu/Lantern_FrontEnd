@@ -66,7 +66,7 @@ const INIT_X_GAP = 10;   // 你原本誤寫成 100，我幫你修正回 10
 const INIT_Y_GAP = 10;
 
 /* ✅ 本頁同時顯示上限（包含使用者天燈） */
-const MAX_ACTIVE = 20;
+const MAX_ACTIVE = 9;
 
 /** 初始鋪滿用：挑一個與已存在清單保持 X/Y 都大於最小間距的位置 */
 const getInitialPosition = (existing: Array<{ x: number; y: number }>) => {
