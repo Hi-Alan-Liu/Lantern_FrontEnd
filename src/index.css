@@ -109,8 +109,8 @@
     --text-scale: 1.2;
 
     /* 字級（全部乘上全域倍率） */
-    --text-xs:  calc(.75rem * var(--text-scale));
-    --text-xs--line-height: calc(1 / .75);
+    --text-xs:  calc(.55rem * var(--text-scale));
+    --text-xs--line-height: calc(1 / .55);
     --text-sm:  calc(.875rem * var(--text-scale));
     --text-sm--line-height: calc(1.25 / .875);
     --text-base: calc(1rem * var(--text-scale));

@@ -380,12 +380,12 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
                 <div className="relative">
                   {/* Glow */}
                   <motion.div
-                    className="absolute inset-0 rounded-full blur-lg pointer-events-none"
+                    className="absolute inset-0 rounded-full blur-lg pointer-events-none mix-blend-screen"
                     style={{
-                      background: `radial-gradient(circle, ${glowColor}70 0%, transparent 70%)`,
-                      boxShadow: `0 0 18px ${glowColor}66`
+                      background: 'radial-gradient(circle, #ffffffb3 0%, transparent 70%)', // 白色核心光
+                      boxShadow: '0 0 24px #ffffff80'                                       // 稍微加深
                     }}
-                    animate={{ scale: [1, 1.5, 1], opacity: [0.7, 1, 0.7] }}
+                    animate={{ scale: [1.3, 2, 1.3] }}
                     transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
                   />
                   <motion.div
