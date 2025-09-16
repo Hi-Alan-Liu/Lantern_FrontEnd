@@ -129,6 +129,7 @@ const toFloatingFromApi = (item: LanternDTO, i: number): FloatingLantern => {
   const text = String(any.text ?? any.content ?? any.Content ?? '');
   const catDisplay = String(any.categoryName ?? any.CategoryName ?? any.category ?? any.Category ?? '其他');
   const catKey = toCategoryKey(any.category ?? any.Category ?? any.categoryName ?? any.CategoryName);
+  const tagline = String(any.taglineText ?? any.taglineText ?? pickRandomTagline());
 
   return {
     id: `lantern-${id}-${i}`,
@@ -139,7 +140,7 @@ const toFloatingFromApi = (item: LanternDTO, i: number): FloatingLantern => {
     wish: text,
     speed: 0.1 + Math.random() * 0.2,
     categoryType: catKey,
-    tagline: pickRandomTagline(),
+    tagline: tagline,
   };
 };
 
@@ -360,50 +361,100 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
           );
         })}
 
-        {/* 使用者的特別天燈（優先佔位；若超過 MAX_ACTIVE，這裡也會被截斷） */}
-        {visibleUserLanterns.slice(0, MAX_ACTIVE).map((userLantern) => {
-          const glowColor = getLanternGlowColor(userLantern.style);
-          return (
-            <motion.div
-              key={userLantern.id}
-              className="absolute cursor-pointer -translate-x-1/2"
-              style={{ left: `${userLantern.position.x}%`, top: `${userLantern.position.y}%` }}
-              animate={{ y: [0, -8, 0], rotate: [0, 3, -3, 0], scale: [1, 1.02, 1] }}
-              transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-              whileHover={{ scale: 1.15 }}
-            >
-              <div className="relative">
-                {/* Glow */}
-                <motion.div
-                  className="absolute inset-0 rounded-full blur-lg"
-                  style={{ background: `radial-gradient(circle, ${glowColor}50 0%, transparent 70%)` }}
-                  animate={{ scale: [1, 1.5, 1], opacity: [0.7, 1, 0.7] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                />
-                <motion.div
-                  className="absolute -inset-4 rounded-full blur-md"
-                  style={{ background: `radial-gradient(circle, ${glowColor}35 0%, transparent 60%)` }}
-                  animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0.8, 0.5] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
-                />
-                <motion.div
-                  className="absolute inset-0 rounded-full blur-sm opacity-30"
-                  style={{ background: `linear-gradient(to top, ${glowColor}60 0%, transparent 100%)`, height: '150%', top: '0%' }}
-                  animate={{ opacity: [0.2, 0.5, 0.2] }}
-                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-                />
-
-                {/* Lantern */}
-                <div className="w-20 h-25 relative transition-all duration-300 z-10">
-                  <LanternRenderer
-                    style={chooseSafeStyle(userLantern.style)}
-                    className="w-full h-full opacity-95"
+        {/* 使用者的特別天燈 */}
+        {animatingUserLanterns
+          .filter((u) => u.position.y > -20)
+          .map((userLantern) => {
+            const glowColor = getLanternGlowColor(userLantern.style);
+            return (
+              <motion.div
+                key={userLantern.id}
+                className="absolute cursor-pointer"
+                style={{ left: `${userLantern.position.x}%`, top: `${userLantern.position.y}%` }}
+                animate={{ y: [0, -8, 0], rotate: [0, 3, -3, 0], scale: [1, 1.02, 1] }}
+                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                whileHover={{ scale: 1.15 }}
+                onMouseEnter={() => setHoveredLantern(userLantern.id)}
+                onMouseLeave={() => setHoveredLantern(null)}
+              >
+                <div className="relative">
+                  {/* Glow */}
+                  <motion.div
+                    className="absolute inset-0 rounded-full blur-lg pointer-events-none"
+                    style={{
+                      background: `radial-gradient(circle, ${glowColor}70 0%, transparent 70%)`,
+                      boxShadow: `0 0 18px ${glowColor}66`
+                    }}
+                    animate={{ scale: [1, 1.5, 1], opacity: [0.7, 1, 0.7] }}
+                    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
                   />
+                  <motion.div
+                    className="absolute -inset-4 rounded-full blur-md"
+                    style={{ background: `radial-gradient(circle, ${glowColor}35 0%, transparent 60%)` }}
+                    animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0.8, 0.5] }}
+                    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
+                  />
+                  <motion.div
+                    className="absolute inset-0 rounded-full blur-sm opacity-30"
+                    style={{ background: `linear-gradient(to top, ${glowColor}60 0%, transparent 100%)`, height: '150%', top: '0%' }}
+                    animate={{ opacity: [0.2, 0.5, 0.2] }}
+                    transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                  />
+
+                  {/* Lantern */}
+                  <div
+                    className={`w-20 h-25 relative transition-all duration-300 ${
+                      hoveredLantern === userLantern.id ? 'scale-110' : 'scale-100'
+                    } z-10`}
+                  >
+                    <LanternRenderer
+                      style={chooseSafeStyle(userLantern.style)}
+                      className="w-full h-full opacity-95"
+                    />
+
+                    {hoveredLantern === userLantern.id && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="absolute -top-28 left-1/2 -translate-x-1/2 bg-card/95 backdrop-blur-sm border-2 rounded-lg p-4 w-64 sm:w-72 md:w-80 text-sm text-center shadow-xl z-50"
+                        style={{ borderColor: `${glowColor}60`, boxShadow: `0 0 25px ${glowColor}40, 0 0 50px ${glowColor}20` }}
+                      >
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                          <motion.div className="w-2 h-2 rounded-full" style={{ backgroundColor: glowColor }}
+                            animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 1.5, repeat: Infinity }} />
+                          <p className="text-accent font-medium text-base">我的願望</p>
+                          <motion.div className="w-2 h-2 rounded-full" style={{ backgroundColor: glowColor }}
+                            animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 1.5, repeat: Infinity, delay: 0.5 }} />
+                        </div>
+                        <p className="text-foreground leading-relaxed font-medium">{userLantern.content}</p>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          {new Date(userLantern.timestamp).toLocaleDateString('zh-TW')}
+                        </p>
+                        <div
+                          className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-card rotate-45"
+                          style={{ borderRight: `1px solid ${glowColor}60`, borderBottom: `1px solid ${glowColor}60` }}
+                        />
+                      </motion.div>
+                    )}
+                  </div>
+
+                  {/* 小星火 */}
+                  <motion.div className="absolute inset-0 pointer-events-none" animate={{ rotate: [0, 360] }}
+                    transition={{ duration: 25, repeat: Infinity, ease: 'linear' }}>
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <motion.div
+                        key={i}
+                        className="absolute w-1 h-1 rounded-full"
+                        style={{ backgroundColor: getLanternGlowColor(userLantern.style), left: `${20 + i * 20}%`, top: `${20 + i * 20}%` }}
+                        animate={{ opacity: [0, 1, 0], scale: [0.3, 1.8, 0.3] }}
+                        transition={{ duration: 2.5, repeat: Infinity, delay: i * 0.6 }}
+                      />
+                    ))}
+                  </motion.div>
                 </div>
-              </div>
-            </motion.div>
-          );
-        })}
+              </motion.div>
+            );
+          })}
       </div>
 
       {/* Bottom */}
