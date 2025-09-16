@@ -94,16 +94,38 @@ const INIT_Y_GAP = 10;
 /* ✅ 本頁同時顯示上限（包含使用者天燈） */
 const MAX_ACTIVE = 9;
 
-/** 初始鋪滿用：挑一個與已存在清單保持 X/Y 都大於最小間距的位置 */
+const MIN_DIST = Math.max(INIT_X_GAP, INIT_Y_GAP); // 以你現有常數為下限
+
+const dist = (a: {x:number;y:number}, b: {x:number;y:number}) => {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.hypot(dx, dy);
+};
+
 const getInitialPosition = (existing: Array<{ x: number; y: number }>) => {
-  for (let tries = 0; tries < 80; tries++) {
-    const x = randIn(XMIN, XMAX);
-    const y = Math.random() * 100; // 初始直接鋪在畫面 0~100%
-    const ok = existing.every(p => Math.abs(p.x - x) > INIT_X_GAP && Math.abs(p.y - y) > INIT_Y_GAP);
-    if (ok) return { x, y };
+  let best: {x:number;y:number} | null = null;
+  let bestMinD = -1;
+
+  // 多嘗試幾次，並記錄「最遠候選」
+  for (let tries = 0; tries < 120; tries++) {
+    const candidate = { x: randIn(XMIN, XMAX), y: Math.random() * 100 };
+
+    // 沒有既有點就直接用
+    if (existing.length === 0) return candidate;
+
+    const ok = existing.every(p => dist(p, candidate) > MIN_DIST);
+    if (ok) return candidate;
+
+    // 記錄此候選「離最近既有點」的距離，用來挑最遠者
+    const minD = existing.reduce((m, p) => Math.min(m, dist(p, candidate)), Infinity);
+    if (minD > bestMinD) {
+      bestMinD = minD;
+      best = candidate;
+    }
   }
-  // fallback：如果一直找不到，就給一個安全區的隨機點
-  return { x: randIn(XMIN, XMAX), y: Math.random() * 100 };
+
+  // 找不到完全合規位置 → 退而求其次選「目前看起來最遠」的候選
+  return best ?? { x: randIn(XMIN, XMAX), y: Math.random() * 100 };
 };
 
 const toCategoryKey = (raw?: string): CategoryKey => {
