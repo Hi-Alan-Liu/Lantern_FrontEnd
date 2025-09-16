@@ -8,7 +8,33 @@ import { getLanternList } from './lantern/lanternService';
 import type { LanternDTO, LanternStyleKey, WishCategory } from './lantern/lantern';
 import { AVAILABLE_STYLE_KEYS } from './lantern/constants';
 
-const ANTI_DRUG_TAGLINES = ['青春無毒', '拒毒守心', '遠離毒害'] as const;
+const ANTI_DRUG_TAGLINES = [
+  '要健康 不吸毒',
+  '愛與陪伴 全民防毒',
+  '遠離毒品 守護健康',
+  '反毒新世代 幸福下一代',
+  '彩色人生 拒絕毒品',
+  '青春要舞台，毒品不要來',
+  '毒品無底洞，終身不能碰',
+  '堅定說不，毒品讓步',
+  '堅持自己，拒絕毒來毒往',
+  '食毒九輸，無毒才有我',
+  '重視生命，拒絕毒害',
+  '反毒好表現，行動是關鍵',
+  '用愛牽起手，反毒不失守',
+  '反毒好樣，健康好YOUNG！',
+  '反毒雄讚',
+  '青春要舞台，毒品不要來',
+  '青春不毒白',
+  '拒絕「毒」、「賭」一生',
+  '吸毒人生塗塗塗！',
+  '堅定說不，毒品讓步',
+  '毒品無底洞，終身不能碰',
+  '染毒一生，孤獨一生',
+  '拒絕毒品，你我做起',
+  '邪惡毒品愛KO',
+] as const;
+
 const pickRandomTagline = () =>
   ANTI_DRUG_TAGLINES[Math.floor(Math.random() * ANTI_DRUG_TAGLINES.length)];
 
