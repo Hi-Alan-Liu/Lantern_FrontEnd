@@ -85,7 +85,6 @@ const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(mi
 const randIn = (min: number, max: number) => min + Math.random() * (max - min);
 const INIT_X_GAP = 10;
 const INIT_Y_GAP = 10;
-const MAX_ACTIVE = 9; // 畫面同時顯示上限
 const MIN_DIST = Math.max(INIT_X_GAP, INIT_Y_GAP);
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) =>
   Math.hypot(a.x - b.x, a.y - b.y);
@@ -93,27 +92,27 @@ const dist = (a: { x: number; y: number }, b: { x: number; y: number }) =>
 /* === 統一上升速度：數值越大越快（每 100ms tick）=== */
 const RISE_SPEED = 0.25;
 
-/* === 生成從螢幕外開始（+100）的小工具 === */
-const OFFSCREEN_Y_OFFSET = 0; // 110 -> 210
-const spawnBelow = (extra = 0) => 110 + OFFSCREEN_Y_OFFSET + extra; // 210 + extra
+/* === 生成從螢幕外開始的小工具 === */
+const OFFSCREEN_Y_OFFSET = 90; // 讓 110 -> 110
+const spawnBelow = (extra = 0) => 110 + OFFSCREEN_Y_OFFSET + extra;
 
 /* === 模糊防重疊：可調參數（像素） === */
 export const COLLISION_FUZZ_PX = 200; // 你可調整這個值
 
-// 像素 -> 百分比（相對 viewport），避免不同裝置大小造成落差
+// 像素 -> 百分比（相對 viewport）
 const pxToPercentX = (px: number) =>
   typeof window === 'undefined' ? 0 : (px / window.innerWidth) * 100;
 const pxToPercentY = (px: number) =>
   typeof window === 'undefined' ? 0 : (px / window.innerHeight) * 100;
 
-// 檢查候選點是否落入「既有點的 ±COLLISION_FUZZ_PX」矩形範圍
+// 模糊矩形禁放區
 const fuzzyOverlap = (a: { x: number; y: number }, b: { x: number; y: number }) => {
   const fx = pxToPercentX(COLLISION_FUZZ_PX);
   const fy = pxToPercentY(COLLISION_FUZZ_PX);
   return Math.abs(a.x - b.x) <= fx && Math.abs(a.y - b.y) <= fy;
 };
 
-/* 依序找一個不重疊的位置（同時考慮圓形距離與模糊矩形禁放區） */
+/* 找不重疊的位置 */
 const getInitialPosition = (existing: Array<{ x: number; y: number }>) => {
   let best: { x: number; y: number } | null = null;
   let bestMinD = -1;
@@ -121,7 +120,6 @@ const getInitialPosition = (existing: Array<{ x: number; y: number }>) => {
     const candidate = { x: randIn(XMIN, XMAX), y: Math.random() * 100 };
     if (existing.length === 0) return candidate;
 
-    // 與每個既有點都要同時通過：距離 > MIN_DIST 且不落入模糊矩形禁放區
     const ok = existing.every(
       (p) => dist(p, candidate) > MIN_DIST && !fuzzyOverlap(p, candidate)
     );
@@ -169,7 +167,7 @@ const toFloatingFromApi = (item: LanternDTO, i: number): FloatingLantern => {
     style,
     category: catDisplay,
     wish: text,
-    speed: RISE_SPEED,   // 固定速度
+    speed: RISE_SPEED,
     categoryType: catKey,
     tagline,
   };
@@ -194,22 +192,50 @@ const CategoryIcon = (k: CategoryKey) => {
   }
 };
 
+/* ---------- 依螢幕寬度動態決定同時顯示天燈上限（3~9） ---------- */
+const useViewportWidth = () => {
+  const [w, setW] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1024);
+  useEffect(() => {
+    const onR = () => setW(window.innerWidth);
+    window.addEventListener('resize', onR);
+    window.addEventListener('orientationchange', onR);
+    return () => {
+      window.removeEventListener('resize', onR);
+      window.removeEventListener('orientationchange', onR);
+    };
+  }, []);
+  return w;
+};
+
+const computeMaxActiveByWidth = (vw: number) => {
+  if (vw < 360) return 3;
+  if (vw < 420) return 4;
+  if (vw < 520) return 5;
+  if (vw < 640) return 6;
+  if (vw < 768) return 7;
+  if (vw < 1024) return 8;
+  return 9;
+};
+
 /* ========================================================================== */
 /*                              WishWall Component                             */
 /* ========================================================================== */
 export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
   const [hoveredLantern, setHoveredLantern] = useState<string | null>(null);
 
-  // API「活動中的 1~9 顆」
+  // API「活動中的天燈」
   const [activeApiLanterns, setActiveApiLanterns] = useState<FloatingLantern[]>([]);
   // 使用者天燈（帶動畫位置）
   const [animatingUserLanterns, setAnimatingUserLanterns] = useState<UserLantern[]>([]);
+
+  const viewportWidth = useViewportWidth();
+  const maxActive = useMemo(() => computeMaxActiveByWidth(viewportWidth), [viewportWidth]);
 
   /* ---------------- Pool 與索引（循環佇列） ---------------- */
   const apiPoolRef = useRef<FloatingLantern[]>([]);
   const nextIndexRef = useRef<number>(0);
 
-  /* ---------------- 1) 載入 API；初始化資料池 + 初始鋪滿（y 從螢幕外開始） ---------------- */
+  /* ---------------- 1) 載入 API；初始化資料池 + 初始鋪滿 ---------------- */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -223,15 +249,15 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
         if (mapped.length > 0) {
           apiPoolRef.current = mapped;
           const firstPlaced: FloatingLantern[] = [];
-          mapped.slice(0, MAX_ACTIVE).forEach((l) => {
+          mapped.slice(0, maxActive).forEach((l) => {
             const pos = getInitialPosition(firstPlaced);
             firstPlaced.push({ ...l, x: pos.x, y: pos.y + OFFSCREEN_Y_OFFSET });
           });
           setActiveApiLanterns(firstPlaced);
-          nextIndexRef.current = Math.min(mapped.length, MAX_ACTIVE);
+          nextIndexRef.current = Math.min(mapped.length, maxActive);
         } else {
           const fallbackPool: FloatingLantern[] = [];
-          for (let i = 0; i < Math.max(MAX_ACTIVE, 14); i++) {
+          for (let i = 0; i < Math.max(maxActive, 14); i++) {
             const w = sampleWishes[Math.floor(Math.random() * sampleWishes.length)];
             const style = validStyleIds[Math.floor(Math.random() * validStyleIds.length)];
             fallbackPool.push({
@@ -249,17 +275,17 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
           apiPoolRef.current = fallbackPool;
 
           const firstPlaced: FloatingLantern[] = [];
-          fallbackPool.slice(0, MAX_ACTIVE).forEach((l) => {
+          fallbackPool.slice(0, maxActive).forEach((l) => {
             const pos = getInitialPosition(firstPlaced);
             firstPlaced.push({ ...l, x: pos.x, y: pos.y + OFFSCREEN_Y_OFFSET });
           });
           setActiveApiLanterns(firstPlaced);
-          nextIndexRef.current = Math.min(fallbackPool.length, MAX_ACTIVE);
+          nextIndexRef.current = Math.min(fallbackPool.length, maxActive);
         }
       } catch {
         if (!alive) return;
         const fallbackPool: FloatingLantern[] = [];
-        for (let i = 0; i < Math.max(MAX_ACTIVE, 14); i++) {
+        for (let i = 0; i < Math.max(maxActive, 14); i++) {
           const w = sampleWishes[Math.floor(Math.random() * sampleWishes.length)];
           const style = validStyleIds[Math.floor(Math.random() * validStyleIds.length)];
           fallbackPool.push({
@@ -277,16 +303,17 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
         apiPoolRef.current = fallbackPool;
 
         const firstPlaced: FloatingLantern[] = [];
-        fallbackPool.slice(0, MAX_ACTIVE).forEach((l) => {
+        fallbackPool.slice(0, maxActive).forEach((l) => {
           const pos = getInitialPosition(firstPlaced);
           firstPlaced.push({ ...l, x: pos.x, y: pos.y + OFFSCREEN_Y_OFFSET });
         });
         setActiveApiLanterns(firstPlaced);
-        nextIndexRef.current = Math.min(fallbackPool.length, MAX_ACTIVE);
+        nextIndexRef.current = Math.min(fallbackPool.length, maxActive);
       }
     })();
     return () => { alive = false; };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [maxActive]); // 視窗寬度變更 → 重新鋪滿
 
   /* ---------------- 2) 使用者天燈：進來時 clamp x 到安全區 ---------------- */
   useEffect(() => {
@@ -303,16 +330,15 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
     () => animatingUserLanterns.filter((u) => u.position.y > -20),
     [animatingUserLanterns]
   );
-  const apiSlots = Math.max(0, MAX_ACTIVE - visibleUserLanterns.length);
+  const apiSlots = Math.max(0, maxActive - visibleUserLanterns.length);
 
-  // apiSlots 變化時，補或裁減 activeApiLanterns（從 pool 取「下一筆」，y 從螢幕外）
+  // apiSlots 變化時，補或裁減 activeApiLanterns
   useEffect(() => {
     setActiveApiLanterns((prev) => {
       const pool = apiPoolRef.current;
       if (pool.length === 0) return prev;
 
       if (prev.length === apiSlots) return prev;
-
       if (prev.length > apiSlots) {
         return prev.slice(0, apiSlots);
       }
@@ -326,15 +352,15 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
         added.push({
           ...next,
           x: pos.x,
-          y: spawnBelow(Math.random() * 10), // 210~220
+          y: spawnBelow(Math.random() * 10),
           speed: RISE_SPEED,
         });
       }
       return [...prev, ...added];
     });
-  }, [apiSlots]);
+  }, [apiSlots, maxActive]);
 
-  /* ---------------- 4) setInterval 迴圈（每 100ms 更新；離場重生從螢幕外） ---------------- */
+  /* ---------------- 4) setInterval 迴圈（每 100ms 更新） ---------------- */
   useEffect(() => {
     const timer = setInterval(() => {
       setActiveApiLanterns((prev) => {
@@ -423,7 +449,6 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
       <div className="absolute inset-0 overflow-hidden">
         {visibleLanterns.map((lantern) => {
           const Icon = CategoryIcon(lantern.categoryType);
-
           const tipSide = lantern.x < 15 ? 'left' : lantern.x > 85 ? 'right' : 'center';
           const tipClass =
             tipSide === 'left'
@@ -465,7 +490,7 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
                     </motion.div>
                   )}
 
-                  {/* Tagline badge（防誤觸） */}
+                  {/* Tagline badge */}
                   <div
                     className="absolute left-1/2 top-full -translate-x-1/2 mt-1.5
                                px-1.5 py-[2px] rounded-xs border border-border/30
