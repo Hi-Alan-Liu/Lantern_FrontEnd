@@ -169,6 +169,10 @@ const CategoryIcon = (k: CategoryKey) => {
   }
 };
 
+/* === 生成從螢幕外開始（+100）的小工具 === */
+const OFFSCREEN_Y_OFFSET = 80;
+const spawnBelow = (extra = 0) => 110 + OFFSCREEN_Y_OFFSET + extra; // 210 + extra
+
 /* ========================================================================== */
 /*                              WishWall Component                             */
 /* ========================================================================== */
@@ -185,7 +189,7 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
   const apiPoolRef = useRef<FloatingLantern[]>([]);  // API 回來的全量（例如 40）
   const nextIndexRef = useRef<number>(0);            // 下一筆要補進來的 index
 
-  /* ---------------- 1) 載入 API；初始化資料池 + 初始 1~9 鋪滿 ---------------- */
+  /* ---------------- 1) 載入 API；初始化資料池 + 初始鋪滿（y 從螢幕外開始） ---------------- */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -198,11 +202,11 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
 
         if (mapped.length > 0) {
           apiPoolRef.current = mapped;
-          // 初始化活動 1~MAX_ACTIVE
+          // 初始化活動 1~MAX_ACTIVE（y 加 OFFSCREEN_Y_OFFSET）
           const firstPlaced: FloatingLantern[] = [];
           mapped.slice(0, MAX_ACTIVE).forEach((l) => {
             const pos = getInitialPosition(firstPlaced);
-            firstPlaced.push({ ...l, x: pos.x, y: pos.y });
+            firstPlaced.push({ ...l, x: pos.x, y: pos.y + OFFSCREEN_Y_OFFSET });
           });
           setActiveApiLanterns(firstPlaced);
           nextIndexRef.current = Math.min(mapped.length, MAX_ACTIVE); // 從第 10 筆開始
@@ -229,7 +233,7 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
           const firstPlaced: FloatingLantern[] = [];
           fallbackPool.slice(0, MAX_ACTIVE).forEach((l) => {
             const pos = getInitialPosition(firstPlaced);
-            firstPlaced.push({ ...l, x: pos.x, y: pos.y });
+            firstPlaced.push({ ...l, x: pos.x, y: pos.y + OFFSCREEN_Y_OFFSET });
           });
           setActiveApiLanterns(firstPlaced);
           nextIndexRef.current = Math.min(fallbackPool.length, MAX_ACTIVE);
@@ -258,7 +262,7 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
         const firstPlaced: FloatingLantern[] = [];
         fallbackPool.slice(0, MAX_ACTIVE).forEach((l) => {
           const pos = getInitialPosition(firstPlaced);
-          firstPlaced.push({ ...l, x: pos.x, y: pos.y });
+          firstPlaced.push({ ...l, x: pos.x, y: pos.y + OFFSCREEN_Y_OFFSET });
         });
         setActiveApiLanterns(firstPlaced);
         nextIndexRef.current = Math.min(fallbackPool.length, MAX_ACTIVE);
@@ -284,7 +288,7 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
   );
   const apiSlots = Math.max(0, MAX_ACTIVE - visibleUserLanterns.length);
 
-  // apiSlots 變化時，補或裁減 activeApiLanterns（從 pool 取「下一筆」）
+  // apiSlots 變化時，補或裁減 activeApiLanterns（從 pool 取「下一筆」，y 從螢幕外）
   useEffect(() => {
     setActiveApiLanterns((prev) => {
       const pool = apiPoolRef.current;
@@ -305,7 +309,7 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
         added.push({
           ...next,
           x: pos.x,
-          y: 110 + Math.random() * 10,
+          y: spawnBelow(Math.random() * 10), // 由 110~120 變成 210~220
           speed: next.speed ?? (0.1 + Math.random() * 0.2),
         });
       }
@@ -313,14 +317,14 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
     });
   }, [apiSlots]);
 
-  /* ---------------- 4) setInterval 迴圈（每 100ms 更新） ---------------- */
+  /* ---------------- 4) setInterval 迴圈（每 100ms 更新；離場重生從螢幕外） ---------------- */
   useEffect(() => {
     const timer = setInterval(() => {
       // API 活動天燈：若離場，換「下一筆」補位（1→2→…→40→1）
       setActiveApiLanterns((prev) => {
         const pool = apiPoolRef.current;
         if (pool.length === 0) {
-          // 沒 pool：維持原先重生邏輯
+          // 沒 pool：維持原先重生邏輯，但 y 從螢幕外開始
           return prev.map((l) => {
             const ny = l.y - l.speed;
             if (ny >= -10) {
@@ -329,7 +333,7 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
             const w = sampleWishes[Math.floor(Math.random() * sampleWishes.length)];
             return {
               ...l,
-              y: 110,
+              y: spawnBelow(0),          // 原本 110 → 210
               x: randIn(XMIN, XMAX),
               wish: l.wish?.trim() ? l.wish : w.wish,
               category: l.category?.trim() ? l.category : w.category,
@@ -347,7 +351,7 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
           if (ny >= -10) {
             updated.push({ ...l, y: ny, x: clamp(l.x, XMIN, XMAX) });
           } else {
-            // 離場 → 從資料池取「下一筆」補位（循環佇列）
+            // 離場 → 從資料池取「下一筆」補位（循環佇列），y 從螢幕外
             const next = pool[nextIndexRef.current % pool.length];
             nextIndexRef.current = (nextIndexRef.current + 1) % pool.length;
 
@@ -355,7 +359,7 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
             updated.push({
               ...next,
               x: pos.x,
-              y: 110 + Math.random() * 10,
+              y: spawnBelow(Math.random() * 10), // 原本 110~120 → 210~220
               speed: next.speed ?? (0.1 + Math.random() * 0.2),
             });
           }
@@ -363,14 +367,14 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
         return updated;
       });
 
-      // 使用者天燈：自走 + 循環
+      // 使用者天燈：自走 + 循環（重生時 y 從螢幕外）
       setAnimatingUserLanterns((prev) =>
         prev.map((u) => {
           const newY = u.position.y - 0.12;
           if (newY < -25) {
             return {
               ...u,
-              position: { y: 110 + Math.random() * 20, x: randIn(XMIN, XMAX) },
+              position: { y: spawnBelow(Math.random() * 20), x: randIn(XMIN, XMAX) }, // 原本 110~130 → 210~230
             };
           }
           return { ...u, position: { x: clamp(u.position.x, XMIN, XMAX), y: newY } };
