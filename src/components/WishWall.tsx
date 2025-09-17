@@ -126,6 +126,9 @@ const chooseSafeStyle = (raw?: string): LanternStyleKey => {
   return (validStyleIds as string[]).includes(s) ? s : ('turtle' as LanternStyleKey);
 };
 
+/* === 統一上升速度：數值越大越快 === */
+const RISE_SPEED = 0.25; // 100ms tick 會往上減少 0.25%
+
 /* 將 API DTO 轉為 FloatingLantern（含 tagline 鍵修正） */
 const toFloatingFromApi = (item: LanternDTO, i: number): FloatingLantern => {
   const any = item as any;
@@ -144,7 +147,7 @@ const toFloatingFromApi = (item: LanternDTO, i: number): FloatingLantern => {
     style,
     category: catDisplay,
     wish: text,
-    speed: 0.1 + Math.random() * 0.2,
+    speed: RISE_SPEED,             // ★ 固定速度
     categoryType: catKey,
     tagline,
   };
@@ -170,7 +173,7 @@ const CategoryIcon = (k: CategoryKey) => {
 };
 
 /* === 生成從螢幕外開始（+100）的小工具 === */
-const OFFSCREEN_Y_OFFSET = 80;
+const OFFSCREEN_Y_OFFSET = 90; // ★ +100：0~100 變 100~200；110 變 210
 const spawnBelow = (extra = 0) => 110 + OFFSCREEN_Y_OFFSET + extra; // 210 + extra
 
 /* ========================================================================== */
@@ -223,7 +226,7 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
               style,
               category: w.category,
               wish: w.wish,
-              speed: 0.1 + Math.random() * 0.2,
+              speed: RISE_SPEED,         // ★ 固定速度
               categoryType: w.type,
               tagline: pickRandomTagline(),
             });
@@ -252,7 +255,7 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
             style,
             category: w.category,
             wish: w.wish,
-            speed: 0.1 + Math.random() * 0.2,
+            speed: RISE_SPEED,           // ★ 固定速度
             categoryType: w.type,
             tagline: pickRandomTagline(),
           });
@@ -309,8 +312,8 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
         added.push({
           ...next,
           x: pos.x,
-          y: spawnBelow(Math.random() * 10), // 由 110~120 變成 210~220
-          speed: next.speed ?? (0.1 + Math.random() * 0.2),
+          y: spawnBelow(Math.random() * 10), // 210~220
+          speed: RISE_SPEED,                 // ★ 固定速度
         });
       }
       return [...prev, ...added];
@@ -324,17 +327,18 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
       setActiveApiLanterns((prev) => {
         const pool = apiPoolRef.current;
         if (pool.length === 0) {
-          // 沒 pool：維持原先重生邏輯，但 y 從螢幕外開始
+          // 沒 pool：維持原先重生邏輯，但使用固定速度，且 y 從螢幕外開始
           return prev.map((l) => {
-            const ny = l.y - l.speed;
+            const ny = l.y - RISE_SPEED; // ★ 固定速度
             if (ny >= -10) {
               return { ...l, y: ny, x: clamp(l.x, XMIN, XMAX) };
             }
             const w = sampleWishes[Math.floor(Math.random() * sampleWishes.length)];
             return {
               ...l,
-              y: spawnBelow(0),          // 原本 110 → 210
+              y: spawnBelow(0),          // 210
               x: randIn(XMIN, XMAX),
+              speed: RISE_SPEED,         // ★ 固定速度
               wish: l.wish?.trim() ? l.wish : w.wish,
               category: l.category?.trim() ? l.category : w.category,
               categoryType: l.categoryType ?? w.type,
@@ -346,7 +350,7 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
         const updated: FloatingLantern[] = [];
         for (let i = 0; i < prev.length; i++) {
           const l = prev[i];
-          const ny = l.y - l.speed;
+          const ny = l.y - RISE_SPEED; // ★ 固定速度
 
           if (ny >= -10) {
             updated.push({ ...l, y: ny, x: clamp(l.x, XMIN, XMAX) });
@@ -359,22 +363,22 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
             updated.push({
               ...next,
               x: pos.x,
-              y: spawnBelow(Math.random() * 10), // 原本 110~120 → 210~220
-              speed: next.speed ?? (0.1 + Math.random() * 0.2),
+              y: spawnBelow(Math.random() * 10), // 210~220
+              speed: RISE_SPEED,                 // ★ 固定速度
             });
           }
         }
         return updated;
       });
 
-      // 使用者天燈：自走 + 循環（重生時 y 從螢幕外）
+      // 使用者天燈：自走 + 循環（重生時 y 從螢幕外；固定速度）
       setAnimatingUserLanterns((prev) =>
         prev.map((u) => {
-          const newY = u.position.y - 0.12;
+          const newY = u.position.y - RISE_SPEED; // ★ 固定速度
           if (newY < -25) {
             return {
               ...u,
-              position: { y: spawnBelow(Math.random() * 20), x: randIn(XMIN, XMAX) }, // 原本 110~130 → 210~230
+              position: { y: spawnBelow(Math.random() * 20), x: randIn(XMIN, XMAX) }, // 210~230
             };
           }
           return { ...u, position: { x: clamp(u.position.x, XMIN, XMAX), y: newY } };
