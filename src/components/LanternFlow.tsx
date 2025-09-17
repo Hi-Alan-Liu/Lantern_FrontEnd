@@ -331,7 +331,7 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
                 animate={{ opacity: [0.7, 1, 0.7] }}
                 transition={{ duration: 2, repeat: Infinity }}
               >
-                {wishContent.length > 15 ? `${wishContent.substring(0, 15)}...` : wishContent}
+                {/*wishContent.length > 15 ? `${wishContent.substring(0, 15)}...` : wishContent*/}
               </motion.div>
               {Array.from({ length: 6 }).map((_, i) => (
                 <motion.div
