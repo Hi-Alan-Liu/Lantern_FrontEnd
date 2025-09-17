@@ -581,9 +581,9 @@ export function LanternFlow({ onNavigate, userPoints, onSpendPoints, onAddLanter
                     className={`min-h-32 bg-input-background border-border/50 focus:border-accent resize-none ${
                       showWarning ? 'border-destructive/50 focus:border-destructive' : ''
                     }`}
-                    maxLength={200}
+                    maxLength={50}
                   />
-                  <p className="text-xs text-muted-foreground mt-2 text-right">{wishContent.length}/200</p>
+                  <p className="text-xs text-muted-foreground mt-2 text-right">{wishContent.length}/50</p>
 
                   {showWarning && (
                     <motion.div
