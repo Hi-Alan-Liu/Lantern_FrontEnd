@@ -65,5 +65,17 @@ export const suggestionTexts: Record<WishCategory, string[]> = {
 } as const;
 
 export const AVAILABLE_STYLE_KEYS: readonly LanternStyleKey[] = [
-  'turtle','tiger','bird','sunflower','otter','cat','hedgehog','rabbit','elephant'
+  'turtle',
+  'tiger',
+  'bird',
+  'sunflower',
+  'otter',
+  'cat',
+  'hedgehog',
+  'rabbit',
+  'elephant',
+  'eagle',
+  'lion',
+  'wolf',
+  'fox'
 ] as const;

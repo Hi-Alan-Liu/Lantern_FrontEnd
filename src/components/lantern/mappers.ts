@@ -24,7 +24,9 @@ export interface Category {
 
 /** 已知可渲染的樣式 key */
 const KNOWN_STYLE_KEYS: LanternStyleKey[] = [
-  'turtle','tiger','bird','sunflower','otter','cat','hedgehog','rabbit','elephant'
+  'turtle','tiger','bird','sunflower',
+  'otter','cat','hedgehog','rabbit','elephant',
+  'eagle','lion','wolf','fox'
 ];
 
 /** 把後端 StyleDTO 映射成前端可用的 key */
@@ -44,6 +46,12 @@ export function mapStyleKey(dto: StyleDTO): LanternStyleKey {
   if (/(hedgehog|刺蝟|刺猬)/.test(name)) return 'hedgehog';
   if (/(rabbit|兔|兔子)/.test(name)) return 'rabbit';
   if (/(elephant|大象)/.test(name)) return 'elephant';
+  if (/(eagle|鷹|老鷹)/.test(name)) return 'eagle';
+  if (/(lion|獅|獅子)/.test(name)) return 'lion';
+  if (/(wolf|狼)/.test(name)) return 'wolf';
+  if (/(fox|狐狸)/.test(name)) return 'fox';
+
+  // fallback
   return 'turtle';
 }
 

@@ -29,14 +29,21 @@ import { createLantern, getStyleList, getCategoryList } from './lantern/lanternS
 const normalize = (s?: string) => (s ?? '').toLowerCase().trim();
 
 /** Style → 前端 key（給 LanternRenderer & 本地 state） */
+/** Style → 前端 key（給 LanternRenderer & 本地 state） */
 function mapStyleToKey(style: StyleDTO): LanternStyleKey {
   const anyStyle = style as any;
   const code = normalize(anyStyle.code ?? anyStyle.Name ?? anyStyle.name);
-  if (['turtle','tiger','bird','rabbit','sunflower','otter','cat','hedgehog','elephant'].includes(code)) {
+
+  if ([
+    'turtle','tiger','bird','rabbit',
+    'sunflower','otter','cat','hedgehog',
+    'elephant','eagle','lion','wolf','fox'
+  ].includes(code)) {
     return code as LanternStyleKey;
   }
 
   const name = normalize(anyStyle.displayName ?? anyStyle.name);
+
   if (/(turtle|龜|烏龜)/.test(name)) return 'turtle';
   if (/(tiger|虎|老虎)/.test(name)) return 'tiger';
   if (/(bird|鳥|小鳥)/.test(name)) return 'bird';
@@ -46,6 +53,11 @@ function mapStyleToKey(style: StyleDTO): LanternStyleKey {
   if (/(cat|貓)/.test(name)) return 'cat';
   if (/(hedgehog|刺蝟|刺猬)/.test(name)) return 'hedgehog';
   if (/(elephant|大象)/.test(name)) return 'elephant';
+  if (/(eagle|鷹|老鷹)/.test(name)) return 'eagle';
+  if (/(lion|獅|獅子)/.test(name)) return 'lion';
+  if (/(wolf|狼)/.test(name)) return 'wolf';
+  if (/(fox|狐狸)/.test(name)) return 'fox';
+
   return 'turtle';
 }
 

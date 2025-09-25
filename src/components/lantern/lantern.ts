@@ -48,7 +48,18 @@ export interface LanternDTO {
 
 // 你原本前端用的 key
 export type LanternStyleKey =
-  | 'turtle' | 'tiger' | 'bird' | 'sunflower'
-  | 'otter' | 'cat' | 'hedgehog' | 'rabbit' | 'elephant';
+  | 'turtle'
+  | 'tiger'
+  | 'bird'
+  | 'sunflower'
+  | 'otter'
+  | 'cat'
+  | 'hedgehog'
+  | 'rabbit'
+  | 'elephant'
+  | 'eagle'
+  | 'lion'
+  | 'wolf'
+  | 'fox';
 
 export type WishCategory = 'wish' | 'talk' | 'thanks' | 'vent' | 'other';
