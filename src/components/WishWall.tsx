@@ -7,6 +7,7 @@ import { LanternRenderer } from './lantern/LanternRenderer';
 import { getLanternList } from './lantern/lanternService';
 import type { LanternDTO, LanternStyleKey, WishCategory } from './lantern/lantern';
 import { AVAILABLE_STYLE_KEYS } from './lantern/constants';
+import tagBg from '@/assets/tag-bg.png';
 
 /* ---------- 反毒標語（用於隨機 tagline） ---------- */
 const ANTI_DRUG_TAGLINES = [
@@ -90,10 +91,10 @@ const dist = (a: { x: number; y: number }, b: { x: number; y: number }) =>
   Math.hypot(a.x - b.x, a.y - b.y);
 
 /* === 統一上升速度：數值越大越快（每 100ms tick）=== */
-const RISE_SPEED = 0.25;
+const RISE_SPEED = 0;
 
 /* === 生成從螢幕外開始的小工具 === */
-const OFFSCREEN_Y_OFFSET = 90; // 讓 110 -> 110
+const OFFSCREEN_Y_OFFSET = 0; // 讓 110 -> 110
 const spawnBelow = (extra = 0) => 110 + OFFSCREEN_Y_OFFSET + extra;
 
 /* === 模糊防重疊：可調參數（像素） === */
@@ -491,15 +492,31 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
                   )}
 
                   {/* Tagline badge */}
-                  <div
-                    className="absolute left-1/2 top-full -translate-x-1/2 mt-1.5
-                               px-1.5 py-[2px] rounded-xs border border-border/30
-                               bg-card/80 backdrop-blur-sm shadow
-                               text-xs leading-[1.1] text-white/85 text-center w-max
-                               pointer-events-none"
-                  >
-                    {lantern.tagline}
-                  </div>
+<div
+  className="absolute top-full mt-2 left-0 pointer-events-none"
+  style={{
+    transform: 'translate(-30%, -20px) scale(1.2)', // 放大 1.2 倍，並往上 10px
+    transformOrigin: 'top center', // 確保放大以吊牌頂部為基準
+  }}
+>
+  <div className="relative inline-block">
+    <img src={tagBg} alt="tag background" className="w-[120px] h-auto" />
+<span
+  className="absolute inset-0 flex items-center font-medium text-white leading-snug break-words"
+  style={{
+    fontSize: '6px',
+    textAlign: 'center',
+    position: 'relative',
+    top: '-34px',       // 👈 控制上下位置
+    paddingLeft: '18px', // 👈 左邊縮進
+    paddingRight: '18px',// 👈 右邊縮進
+    lineHeight: '1.3',  // 👈 行距可調整
+  }}
+>
+  {lantern.tagline}
+</span>
+  </div>
+</div>
                 </div>
               </div>
             </motion.div>
