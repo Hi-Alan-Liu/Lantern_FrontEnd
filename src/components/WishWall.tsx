@@ -504,10 +504,10 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
 <span
   className="absolute inset-0 flex items-center font-medium text-white leading-snug break-words"
   style={{
-    fontSize: '6px',
+    fontSize: '8px',
     textAlign: 'center',
     position: 'relative',
-    top: '-34px',       // 👈 控制上下位置
+    top: '-36px',       // 👈 控制上下位置
     paddingLeft: '18px', // 👈 左邊縮進
     paddingRight: '18px',// 👈 右邊縮進
     lineHeight: '1.3',  // 👈 行距可調整
