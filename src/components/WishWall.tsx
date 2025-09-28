@@ -507,7 +507,7 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
                       fontSize: '7px',
                       textAlign: 'center',
                       position: 'relative',
-                      top: '-37px',       // 👈 控制上下位置
+                      top: '-36px',       // 👈 控制上下位置
                       paddingLeft: '20px', // 👈 左邊縮進
                       paddingRight: '20px',// 👈 右邊縮進
                       lineHeight: '1.3',  // 👈 行距可調整
