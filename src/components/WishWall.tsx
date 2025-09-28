@@ -492,31 +492,31 @@ export function WishWall({ onNavigate, userLanterns }: WishWallProps) {
                   )}
 
                   {/* Tagline badge */}
-<div
-  className="absolute top-full mt-2 left-0 pointer-events-none"
-  style={{
-    transform: 'translate(-30%, -20px) scale(1.2)', // 放大 1.2 倍，並往上 10px
-    transformOrigin: 'top center', // 確保放大以吊牌頂部為基準
-  }}
->
-  <div className="relative inline-block">
-    <img src={tagBg} alt="tag background" className="w-[120px] h-auto" />
-<span
-  className="absolute inset-0 flex items-center font-medium text-white leading-snug break-words"
-  style={{
-    fontSize: '8px',
-    textAlign: 'center',
-    position: 'relative',
-    top: '-36px',       // 👈 控制上下位置
-    paddingLeft: '18px', // 👈 左邊縮進
-    paddingRight: '18px',// 👈 右邊縮進
-    lineHeight: '1.3',  // 👈 行距可調整
-  }}
->
-  {lantern.tagline}
-</span>
-  </div>
-</div>
+                  <div
+                    className="absolute top-full mt-2 left-0 pointer-events-none"
+                    style={{
+                      transform: 'translate(-30%, -20px) scale(1.2)', // 放大 1.2 倍，並往上 10px
+                      transformOrigin: 'top center', // 確保放大以吊牌頂部為基準
+                    }}
+                  >
+                    <div className="relative inline-block">
+                      <img src={tagBg} alt="tag background" className="w-[120px] h-auto" />
+                  <span
+                    className="absolute inset-0 flex items-center font-medium text-white leading-snug break-words"
+                    style={{
+                      fontSize: '7px',
+                      textAlign: 'center',
+                      position: 'relative',
+                      top: '-37px',       // 👈 控制上下位置
+                      paddingLeft: '20px', // 👈 左邊縮進
+                      paddingRight: '20px',// 👈 右邊縮進
+                      lineHeight: '1.3',  // 👈 行距可調整
+                    }}
+                  >
+                    {lantern.tagline}
+                  </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </motion.div>
