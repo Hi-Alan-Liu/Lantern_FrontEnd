@@ -91,10 +91,10 @@ const dist = (a: { x: number; y: number }, b: { x: number; y: number }) =>
   Math.hypot(a.x - b.x, a.y - b.y);
 
 /* === 統一上升速度：數值越大越快（每 100ms tick）=== */
-const RISE_SPEED = 0;
+const RISE_SPEED = 0.25;
 
 /* === 生成從螢幕外開始的小工具 === */
-const OFFSCREEN_Y_OFFSET = 0; // 讓 110 -> 110
+const OFFSCREEN_Y_OFFSET = 90; // 讓 110 -> 110
 const spawnBelow = (extra = 0) => 110 + OFFSCREEN_Y_OFFSET + extra;
 
 /* === 模糊防重疊：可調參數（像素） === */
