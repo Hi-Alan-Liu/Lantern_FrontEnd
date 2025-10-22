@@ -1,7 +1,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --font-size: 22.2px;
+  --font-size: 18.2px;
   --background: #0a0e27;
   --foreground: #e8eaf6;
   --card: #1a1d3a;
@@ -268,7 +268,7 @@ html {
 }
 
 .lantern-glow {
-  animation: glow 20s ease-in-out infinite;
+  animation: glow 2s ease-in-out infinite;
 }
 
 .star-twinkle {
