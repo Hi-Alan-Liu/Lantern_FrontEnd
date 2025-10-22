@@ -252,25 +252,32 @@ export function WishWall({ onNavigate }: { onNavigate: (page: string) => void })
                   })()}
                 </p>
 
-
-                <Button
+                <button
                   onClick={(e: any) => handleLikeLantern(selectedLantern.id, e)}
                   disabled={selectedLantern.isLiked}
-                  className={`w-full ${
-                    selectedLantern.isLiked
-                      ? 'bg-pink-500/30 border-pink-500/60 cursor-not-allowed'
-                      : 'bg-pink-500/20 hover:bg-pink-500/30 border border-pink-500/40'
-                  }`}
+                  className={`w-full max-w-xs mx-auto flex items-center justify-center gap-2 px-4 py-2 rounded-lg
+                    bg-gradient-to-r from-pink-500/20 to-red-500/20 
+                    hover:from-pink-500/30 hover:to-red-500/30 
+                    border border-pink-500/30 
+                    transition-all duration-300 transform
+                    hover:scale-[1.05] active:scale-[0.97]
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                  `}
                 >
                   <Heart
-                    className={`w-4 h-4 mr-2 ${
+                    className={`w-5 h-5 ${
                       selectedLantern.isLiked
-                        ? 'fill-pink-500 text-pink-500'
+                        ? 'fill-pink-400 text-pink-400'
                         : 'text-pink-400'
                     }`}
+                    style={{
+                      fill: selectedLantern.isLiked ? 'var(--color-pink-400)' : 'none', // ✅ 手動覆蓋 Lucide 預設 fill="none"
+                    }}
                   />
-                  {selectedLantern.isLiked ? '已按讚' : '喜歡這個天燈'}
-                </Button>
+                  <span className="text-foreground">
+                    {selectedLantern.isLiked ? '已按讚' : '喜歡這個天燈'}
+                  </span>
+                </button>
               </div>
             </>
           )}
