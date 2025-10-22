@@ -44,6 +44,7 @@ export interface LanternDTO {
   content?: string;
   createdAt?: string;
   userId?: number;
+  taglineText?: string; 
 }
 
 // 你原本前端用的 key
