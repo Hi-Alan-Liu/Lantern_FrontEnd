@@ -6,7 +6,7 @@ import { LanternRenderer } from './lantern/LanternRenderer';
 import { getLanternList } from './lantern/lanternService';
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
 import tagBg from '@/assets/tag-bg.png';
-import type { LanternDTO, LanternStyleKey, WishCategory } from './lantern/lantern';
+import type { LanternDTO, LanternStyleKey } from './lantern/lantern';
 import { AVAILABLE_STYLE_KEYS } from './lantern/constants';
 
 interface UserLantern {
@@ -57,7 +57,6 @@ export function WishWall({ onNavigate, userLanterns, userId, onLikeLantern }: Wi
   const [selectedLantern, setSelectedLantern] = useState<UserLantern | null>(null);
   const [activeApiLanterns, setActiveApiLanterns] = useState<FloatingLantern[]>([]);
   const [animatingUserLanterns, setAnimatingUserLanterns] = useState<UserLantern[]>([]);
-
   const apiPoolRef = useRef<FloatingLantern[]>([]);
 
   const totalLikes = userLanterns
@@ -115,7 +114,9 @@ export function WishWall({ onNavigate, userLanterns, userId, onLikeLantern }: Wi
         console.warn('Fallback: using demo lanterns');
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, []);
 
   useEffect(() => setAnimatingUserLanterns(userLanterns), [userLanterns]);
@@ -140,6 +141,11 @@ export function WishWall({ onNavigate, userLanterns, userId, onLikeLantern }: Wi
     }, 100);
     return () => clearInterval(timer);
   }, []);
+
+  // ✅ 方案 #1：宣告獨立的 Dialog 開關函式
+  const handleDialogChange = (open: boolean) => {
+    if (!open) setSelectedLantern(null);
+  };
 
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden">
@@ -203,12 +209,8 @@ export function WishWall({ onNavigate, userLanterns, userId, onLikeLantern }: Wi
             }
           >
             <div className="relative">
-              <div
-                className="w-16 h-20 relative transition-all duration-300 opacity-80 hover:opacity-100"
-              >
-                {/* 天燈主體 */}
+              <div className="w-16 h-20 relative transition-all duration-300 opacity-80 hover:opacity-100">
                 <LanternRenderer style={l.style} size="small" className="w-full h-full" />
-
                 {/* 吊牌固定顯示 */}
                 <div
                   className="absolute top-full mt-2 left-0 pointer-events-none"
@@ -264,8 +266,8 @@ export function WishWall({ onNavigate, userLanterns, userId, onLikeLantern }: Wi
         })}
       </div>
 
-      {/* Dialog 願望詳情 */}
-      <Dialog open={!!selectedLantern} onOpenChange={(open: boolean) => !open && setSelectedLantern(null)}>
+      {/* ✅ Dialog 願望詳情 */}
+      <Dialog open={!!selectedLantern} onOpenChange={handleDialogChange}>
         <DialogContent className="sm:max-w-md bg-card border-border" aria-describedby={undefined}>
           {selectedLantern && (
             <>
@@ -281,11 +283,16 @@ export function WishWall({ onNavigate, userLanterns, userId, onLikeLantern }: Wi
                 <p className="text-xs text-muted-foreground">
                   {new Date(selectedLantern.timestamp).toLocaleDateString('zh-TW')}
                 </p>
+
                 {selectedLantern.userId !== userId && (
                   <Button
-                    onClick={(e: React.MouseEvent<HTMLButtonElement>) =>
-                      handleLikeLantern(selectedLantern.id, e)
-                    }
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleLikeLantern(selectedLantern.id, e);
+                      setSelectedLantern(prev =>
+                        prev ? { ...prev, likedBy: [...prev.likedBy, userId] } : prev
+                      );
+                    }}
                     disabled={selectedLantern.likedBy.includes(userId)}
                     className="w-full bg-pink-500/20 hover:bg-pink-500/30 border border-pink-500/40"
                   >
