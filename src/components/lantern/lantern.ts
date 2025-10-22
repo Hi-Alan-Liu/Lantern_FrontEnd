@@ -8,6 +8,7 @@ export interface ApiEnvelope<T> {
 // -------- Paged ----------
 export interface Paged<T> {
   totalCount: number;
+  totalLike: number;
   dataList: T[];
 }
 
@@ -45,6 +46,8 @@ export interface LanternDTO {
   createdAt?: string;
   userId?: number;
   taglineText?: string; 
+  likeCount?: number;
+  isLiked?: boolean;
 }
 
 // 你原本前端用的 key

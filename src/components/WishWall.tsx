@@ -3,38 +3,11 @@ import { Button } from './ui/button';
 import { Heart } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LanternRenderer } from './lantern/LanternRenderer';
-import { getLanternList } from './lantern/lanternService';
+import { getLanternList, toggleLanternLike } from './lantern/lanternService';
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
 import tagBg from '@/assets/tag-bg.png';
 import type { LanternDTO, LanternStyleKey } from './lantern/lantern';
 import { AVAILABLE_STYLE_KEYS } from './lantern/constants';
-
-interface UserLantern {
-  id: string;
-  userId: string;
-  style: string;
-  category: string;
-  content: string;
-  timestamp: number;
-  position: { x: number; y: number };
-  likes: number;
-  likedBy: string[];
-}
-
-interface WishWallProps {
-  onNavigate: (page: 'landing' | 'lantern-flow' | 'task-center' | 'wish-wall') => void;
-  userLanterns: UserLantern[];
-  userId: string;
-  onLikeLantern: (lanternId: string) => void;
-}
-
-const normalize = (s?: string) => (s ?? '').toLowerCase().trim();
-const validStyleIds = [...AVAILABLE_STYLE_KEYS] as LanternStyleKey[];
-const XMIN = 5;
-const XMAX = 95;
-const randIn = (min: number, max: number) => min + Math.random() * (max - min);
-const RISE_SPEED = 0.25;
-const spawnBelow = (extra = 0) => 110 + 90 + extra;
 
 interface FloatingLantern {
   id: string;
@@ -44,6 +17,9 @@ interface FloatingLantern {
   category: string;
   wish: string;
   tagline: string;
+  likeCount: number;
+  isLiked: boolean;
+  createdAt: string;
 }
 
 interface FloatingHeart {
@@ -52,66 +28,53 @@ interface FloatingHeart {
   y: number;
 }
 
-export function WishWall({ onNavigate, userLanterns, userId, onLikeLantern }: WishWallProps) {
+export function WishWall({ onNavigate }: { onNavigate: (page: string) => void }) {
   const [floatingHearts, setFloatingHearts] = useState<FloatingHeart[]>([]);
-  const [selectedLantern, setSelectedLantern] = useState<UserLantern | null>(null);
-  const [activeApiLanterns, setActiveApiLanterns] = useState<FloatingLantern[]>([]);
-  const [animatingUserLanterns, setAnimatingUserLanterns] = useState<UserLantern[]>([]);
-  const apiPoolRef = useRef<FloatingLantern[]>([]);
+  const [selectedLantern, setSelectedLantern] = useState<FloatingLantern | null>(null);
+  const [activeLanterns, setActiveLanterns] = useState<FloatingLantern[]>([]);
+  const [totalLikes, setTotalLikes] = useState<number>(0);
 
-  const totalLikes = userLanterns
-    .filter(l => l.userId === userId)
-    .reduce((sum, l) => sum + l.likes, 0);
-
-  const handleLikeLantern = (lanternId: string, e: React.MouseEvent<HTMLButtonElement>) => {
-    e.stopPropagation();
-    const heartId = `heart-${Date.now()}`;
-    setFloatingHearts(prev => [...prev, { id: heartId, x: e.clientX, y: e.clientY }]);
-    setTimeout(() => setFloatingHearts(prev => prev.filter(h => h.id !== heartId)), 1000);
-    onLikeLantern(lanternId);
-  };
-
-  const getLanternGlowColor = (style: string) => {
-    const glowColors: Record<string, string> = {
-      turtle: '#4ade80',
-      tiger: '#f97316',
-      bird: '#06b6d4',
-      sunflower: '#eab308',
-      otter: '#8b5cf6',
-      cat: '#ec4899',
-      hedgehog: '#ef4444',
-      rabbit: '#f59e0b',
-      elephant: '#6366f1',
-    };
-    return glowColors[style] || '#ff8a65';
-  };
+  const XMIN = 5;
+  const XMAX = 95;
+  const RISE_SPEED = 0.25;
+  const randIn = (min: number, max: number) => min + Math.random() * (max - min);
+  const spawnBelow = (extra = 0) => 110 + 90 + extra;
 
   const chooseSafeStyle = (raw?: string): LanternStyleKey => {
-    const s = normalize(raw) as LanternStyleKey;
-    return validStyleIds.includes(s) ? s : ('turtle' as LanternStyleKey);
+    const valid = [...AVAILABLE_STYLE_KEYS] as LanternStyleKey[];
+    const s = (raw ?? '').toLowerCase().trim() as LanternStyleKey;
+    return valid.includes(s) ? s : 'turtle';
   };
 
+  // ✅ 初始化：抓取天燈清單
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
         const res = await getLanternList({ page: 1, pageSize: 0 });
         const list: LanternDTO[] = res?.dataList ?? [];
+
         const mapped: FloatingLantern[] = list.map((item, i) => ({
-          id: `api-${i}`,
+          id: `${item.id}`,
           x: randIn(XMIN, XMAX),
           y: Math.random() * 100,
           style: chooseSafeStyle(item.style),
           category: item.categoryName ?? '許願',
-          wish: item.text ?? item.content ?? '',
+          wish: item.text ?? '',
           tagline: item.taglineText ?? '',
+          likeCount: item.likeCount ?? 0,
+          isLiked: item.isLiked ?? false,
+          createdAt: item.createdAt ?? '',
         }));
+
         if (alive) {
-          apiPoolRef.current = mapped;
-          setActiveApiLanterns(mapped.slice(0, 6));
+          setActiveLanterns(mapped.slice(0, 8));
+          // ✅ 總讚數取自所有 likeCount 加總
+          const sum = mapped.reduce((s, l) => s + (l.likeCount ?? 0), 0);
+          setTotalLikes(sum);
         }
-      } catch {
-        console.warn('Fallback: using demo lanterns');
+      } catch (err) {
+        console.error('getLanternList failed:', err);
       }
     })();
     return () => {
@@ -119,32 +82,65 @@ export function WishWall({ onNavigate, userLanterns, userId, onLikeLantern }: Wi
     };
   }, []);
 
-  useEffect(() => setAnimatingUserLanterns(userLanterns), [userLanterns]);
-
+  // ✅ 飄動畫面更新
   useEffect(() => {
     const timer = setInterval(() => {
-      setActiveApiLanterns(prev =>
+      setActiveLanterns(prev =>
         prev.map(l => ({
           ...l,
           y: l.y - RISE_SPEED,
           ...(l.y < -10 && { y: spawnBelow(Math.random() * 10), x: randIn(XMIN, XMAX) }),
         })),
       );
-      setAnimatingUserLanterns(prev =>
-        prev.map(u => {
-          const newY = u.position.y - 0.15;
-          return newY < -25
-            ? { ...u, position: { y: spawnBelow(20), x: randIn(XMIN, XMAX) } }
-            : { ...u, position: { ...u.position, y: newY } };
-        }),
-      );
     }, 100);
     return () => clearInterval(timer);
   }, []);
 
-  // ✅ 方案 #1：宣告獨立的 Dialog 開關函式
+  // ✅ Dialog 關閉
   const handleDialogChange = (open: boolean) => {
     if (!open) setSelectedLantern(null);
+  };
+
+  // ✅ 點讚
+  const handleLikeLantern = async (lanternId: string, e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+
+    const heartId = `heart-${Date.now()}`;
+    setFloatingHearts(prev => [...prev, { id: heartId, x: e.clientX, y: e.clientY }]);
+    setTimeout(() => setFloatingHearts(prev => prev.filter(h => h.id !== heartId)), 1000);
+
+    try {
+      await toggleLanternLike(lanternId);
+
+      // ✅ 更新當前天燈
+      setActiveLanterns(prev =>
+        prev.map(l =>
+          l.id === lanternId
+            ? {
+                ...l,
+                isLiked: true,
+                likeCount: l.likeCount + 1,
+              }
+            : l,
+        ),
+      );
+
+      // ✅ 更新 Dialog 畫面
+      setSelectedLantern(prev =>
+        prev
+          ? {
+              ...prev,
+              isLiked: true,
+              likeCount: prev.likeCount + 1,
+            }
+          : prev,
+      );
+
+      // ✅ 更新總讚數
+      setTotalLikes(prev => prev + 1);
+    } catch (err) {
+      console.error('toggleLanternLike error:', err);
+    }
   };
 
   return (
@@ -165,7 +161,7 @@ export function WishWall({ onNavigate, userLanterns, userId, onLikeLantern }: Wi
         ))}
       </AnimatePresence>
 
-      {/* 左上角總讚數 */}
+      {/* 總讚數 */}
       <motion.div
         className="fixed top-3 left-3 z-50 bg-card/30 backdrop-blur-sm border border-border/30 rounded-lg px-4 py-2 flex items-center gap-2"
         initial={{ y: -50, opacity: 0 }}
@@ -185,33 +181,22 @@ export function WishWall({ onNavigate, userLanterns, userId, onLikeLantern }: Wi
         </div>
       </div>
 
-      {/* 天燈們 */}
+      {/* 天燈清單 */}
       <div className="absolute inset-0 overflow-hidden">
-        {activeApiLanterns.map(l => (
+        {activeLanterns.map(l => (
           <motion.div
             key={l.id}
             className="absolute cursor-pointer -translate-x-1/2"
             style={{ left: `${l.x}%`, top: `${l.y}%` }}
             animate={{ y: [0, -10, 0], rotate: [0, 2, -2, 0] }}
             transition={{ duration: 3, repeat: Infinity }}
-            onClick={() =>
-              setSelectedLantern({
-                id: l.id,
-                userId: 'public',
-                style: l.style,
-                category: l.category,
-                content: l.wish,
-                timestamp: Date.now(),
-                position: { x: l.x, y: l.y },
-                likes: 0,
-                likedBy: [],
-              })
-            }
+            onClick={() => setSelectedLantern(l)}
           >
             <div className="relative">
-              <div className="w-16 h-20 relative transition-all duration-300 opacity-80 hover:opacity-100">
+              <div className="w-16 h-20 relative opacity-80 hover:opacity-100 transition-all duration-300">
                 <LanternRenderer style={l.style} size="small" className="w-full h-full" />
-                {/* 吊牌固定顯示 */}
+
+                {/* 吊牌 */}
                 <div
                   className="absolute top-full mt-2 left-0 pointer-events-none"
                   style={{
@@ -241,32 +226,9 @@ export function WishWall({ onNavigate, userLanterns, userId, onLikeLantern }: Wi
             </div>
           </motion.div>
         ))}
-
-        {/* 使用者自己的天燈 */}
-        {animatingUserLanterns.map(u => {
-          const glow = getLanternGlowColor(u.style);
-          return (
-            <motion.div
-              key={u.id}
-              className="absolute cursor-pointer"
-              style={{ left: `${u.position.x}%`, top: `${u.position.y}%` }}
-              animate={{ y: [0, -8, 0], rotate: [0, 3, -3, 0], scale: [1, 1.02, 1] }}
-              transition={{ duration: 4, repeat: Infinity }}
-              onClick={() => setSelectedLantern(u)}
-            >
-              <motion.div
-                className="absolute -inset-4 rounded-full blur-md"
-                style={{ background: `radial-gradient(circle, ${glow}40 0%, transparent 60%)` }}
-                animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0.8, 0.5] }}
-                transition={{ duration: 3, repeat: Infinity }}
-              />
-              <LanternRenderer style={u.style as LanternStyleKey} size="large" />
-            </motion.div>
-          );
-        })}
       </div>
 
-      {/* ✅ Dialog 願望詳情 */}
+      {/* Dialog 願望詳情 */}
       <Dialog open={!!selectedLantern} onOpenChange={handleDialogChange}>
         <DialogContent className="sm:max-w-md bg-card border-border" aria-describedby={undefined}>
           {selectedLantern && (
@@ -279,59 +241,41 @@ export function WishWall({ onNavigate, userLanterns, userId, onLikeLantern }: Wi
                   className="mx-auto"
                 />
                 <h3 className="text-accent font-medium">{selectedLantern.category}</h3>
-                <p className="text-foreground">{selectedLantern.content}</p>
-                <p className="text-xs text-muted-foreground">
-                  {new Date(selectedLantern.timestamp).toLocaleDateString('zh-TW')}
+                <p className="text-foreground">{selectedLantern.wish}</p>
+                {/* 🕓 留言時間 */}
+                <p className="text-xs text-gray-400">
+                  {(() => {
+                    const d = new Date(selectedLantern.createdAt ?? Date.now());
+                    return `${d.getFullYear()}年${(d.getMonth() + 1)
+                      .toString()
+                      .padStart(2, '0')}月${d.getDate().toString().padStart(2, '0')}日`;
+                  })()}
                 </p>
 
-                {selectedLantern.userId !== userId && (
-                  <Button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleLikeLantern(selectedLantern.id, e);
-                      setSelectedLantern(prev =>
-                        prev ? { ...prev, likedBy: [...prev.likedBy, userId] } : prev
-                      );
-                    }}
-                    disabled={selectedLantern.likedBy.includes(userId)}
-                    className="w-full bg-pink-500/20 hover:bg-pink-500/30 border border-pink-500/40"
-                  >
-                    <Heart
-                      className={`w-4 h-4 mr-2 ${
-                        selectedLantern.likedBy.includes(userId)
-                          ? 'fill-pink-500 text-pink-500'
-                          : 'text-pink-400'
-                      }`}
-                    />
-                    {selectedLantern.likedBy.includes(userId) ? '已按讚' : '喜歡這個天燈'}
-                  </Button>
-                )}
+
+                <Button
+                  onClick={(e: any) => handleLikeLantern(selectedLantern.id, e)}
+                  disabled={selectedLantern.isLiked}
+                  className={`w-full ${
+                    selectedLantern.isLiked
+                      ? 'bg-pink-500/30 border-pink-500/60 cursor-not-allowed'
+                      : 'bg-pink-500/20 hover:bg-pink-500/30 border border-pink-500/40'
+                  }`}
+                >
+                  <Heart
+                    className={`w-4 h-4 mr-2 ${
+                      selectedLantern.isLiked
+                        ? 'fill-pink-500 text-pink-500'
+                        : 'text-pink-400'
+                    }`}
+                  />
+                  {selectedLantern.isLiked ? '已按讚' : '喜歡這個天燈'}
+                </Button>
               </div>
             </>
           )}
         </DialogContent>
       </Dialog>
-
-      {/* 底部操作 */}
-      <div className="relative z-10 mt-auto p-8">
-        <div className="flex flex-row gap-4 justify-center">
-          <Button
-            onClick={() => onNavigate('lantern-flow')}
-            size="lg"
-            className="px-8 bg-gradient-to-r from-[#ff8a65] to-[#ffb74d]"
-          >
-            我也要點燈
-          </Button>
-          <Button
-            onClick={() => onNavigate('landing')}
-            variant="outline"
-            size="lg"
-            className="px-8"
-          >
-            返回首頁
-          </Button>
-        </div>
-      </div>
     </div>
   );
 }
