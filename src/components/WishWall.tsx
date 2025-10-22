@@ -283,6 +283,32 @@ export function WishWall({ onNavigate }: { onNavigate: (page: string) => void })
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Bottom Content */}
+      <div className="relative z-10 mt-auto p-8">
+        <div className="max-w-2xl mx-auto text-center">
+          <div className="flex flex-row gap-4 justify-center">
+            <Button
+              onClick={() => onNavigate('lantern-flow')}
+              size="lg"
+              className="flex-1 sm:flex-none px-4 sm:px-8 bg-gradient-to-r from-[#ff8a65] to-[#ffb74d] hover:from-[#ff7043] hover:to-[#ff9800]"
+            >
+              <span className="hidden sm:inline">我也要點燈</span>
+              <span className="sm:hidden">點燈</span>
+            </Button>
+            
+            <Button
+              onClick={() => onNavigate('landing')}
+              variant="outline"
+              size="lg"
+              className="flex-1 sm:flex-none px-4 sm:px-8 border-border/50 hover:border-accent/50"
+            >
+              <span className="hidden sm:inline">返回首頁</span>
+              <span className="sm:hidden">首頁</span>
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
