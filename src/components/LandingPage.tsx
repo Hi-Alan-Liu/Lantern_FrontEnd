@@ -40,7 +40,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
           onClick={() => onNavigate('wish-wall')}
           variant="outline"
           size="lg"
-          className="px-10 py-8 text-lg border-2 border-accent/60 hover:border-accent hover:bg-accent/10 rounded-full transition-all duration-300"
+          className="px-10 py-8 text-lg border-2 border-accent/60 rounded-full transition-all duration-300"
         >
           <Star className="w-6 h-6 mr-2" />
           看看別人的天燈
