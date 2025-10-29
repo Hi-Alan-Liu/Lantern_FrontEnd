@@ -207,15 +207,16 @@ export function WishWall({ onNavigate }: { onNavigate: (page: string) => void })
                   <div className="relative inline-block">
                     <img src={tagBg} alt="tag background" className="w-[120px] h-auto" />
                     <span
-                      className="absolute inset-0 flex items-center font-medium text-white leading-snug break-words"
+                      className="absolute inset-0 flex items-center font-medium leading-snug break-words"
                       style={{
                         fontSize: '8px',
                         textAlign: 'center',
                         position: 'relative',
-                        top: '-36px',
+                        top: '-36.5px',
                         paddingLeft: '20px',
                         paddingRight: '20px',
                         lineHeight: '1.3',
+                        color: '#000000',
                       }}
                     >
                       {l.tagline}
